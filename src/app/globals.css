@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  /* מנהל החינוך - כחול */
+  --education-primary: #185FA5;
+  --education-primary-dark: #0C447C;
+  --education-primary-darker: #042C53;
+  --education-light: #B5D4F4;
+  --education-lighter: #E6F1FB;
+
+  /* מחלקת הנוער - קורל */
+  --youth-primary: #D85A30;
+  --youth-primary-dark: #993C1D;
+  --youth-light: #F5C4B3;
+  --youth-lighter: #FAECE7;
+
+  /* הורים/תושבים - ירוק-טורקיז */
+  --parent-primary: #1D9E75;
+  --parent-primary-dark: #0F6E56;
+  --parent-primary-darker: #04342C;
+  --parent-light: #9FE1CB;
+  --parent-lighter: #E1F5EE;
+
+  /* בוט AI - סגול */
+  --bot-primary: #7F77DD;
+  --bot-dark: #534AB7;
+  --bot-lighter: #EEEDFE;
+
+  /* צבעי תחומים - מנהל החינוך */
+  --cat-early: #1D9E75;
+  --cat-elementary: #185FA5;
+  --cat-secondary: #7F77DD;
+  --cat-camps: #D4537E;
+  --cat-haredi: #888780;
+  --cat-edu-general: #5F5E5A;
+  --cat-training: #BA7517;
+  --cat-breaks: #E8B454;
+
+  /* צבעי תחומים - מחלקת הנוער */
+  --cat-dream: #D85A30;
+  --cat-social: #BA7517;
+  --cat-meaningful: #1D9E75;
+  --cat-movements: #639922;
+  --cat-prep: #7F77DD;
+  --cat-recreation: #D4537E;
+  --cat-youth-general: #885511;
+
+  /* מערכת */
+  --success: #1D9E75;
+  --warning: #BA7517;
+  --danger: #C0392B;
+  --info: #185FA5;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F4F4F0;
+  --text-primary: #1A1A1A;
+  --text-secondary: #555555;
+  --text-tertiary: #888888;
+  --border: rgba(0, 0, 0, 0.08);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  margin: 0;
+  background: #fafaf7;
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Heebo', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* RTL utilities */
+.rtl { direction: rtl; }
+.ltr { direction: ltr; }
+
+/* Smooth transitions */
+button { transition: all 0.15s; font-family: inherit; }
+button:active { transform: scale(0.97); }
