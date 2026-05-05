@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { MONTHS_HE, SCHOOL_YEAR_MONTHS, HOLIDAYS } from "@/lib/data";
+import { useState, useMemo, useEffect } from "react";
+import { HOLIDAYS } from "@/lib/data";
 
 interface MonthEvent {
   id: string;
@@ -11,6 +11,8 @@ interface MonthEvent {
   endMonth: number;
   startDay?: number | null;
   endDay?: number | null;
+  startYear?: number | null;
+  endYear?: number | null;
   color: string;
   ageGroups: string[];
   location?: string | null;
@@ -19,35 +21,56 @@ interface MonthEvent {
 interface MonthlyViewProps {
   events: MonthEvent[];
   initialMonth?: number;
+  initialYear?: number;
   onEventClick?: (id: string) => void;
   onDayClick?: (month: number, day: number) => void;
   primaryColor?: string;
 }
 
 const DAY_NAMES_HE = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "שבת"];
+const MONTH_NAMES_FULL = [
+  "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+  "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
+];
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
 }
-
 function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month - 1, 1).getDay();
 }
 
+// תרגום מחודש+שנה לתאריך עברי תקני (תשפ"ה / תשפ"ו / תשפ"ז)
+function getSchoolYearLabel(year: number, month: number): string {
+  const sy = month >= 9 ? year : year - 1;
+  if (sy === 2024) return "תשפ״ה";
+  if (sy === 2025) return "תשפ״ו";
+  if (sy === 2026) return "תשפ״ז";
+  return `${sy}-${sy + 1}`;
+}
+
 export default function MonthlyView({
   events,
-  initialMonth = 9,
+  initialMonth,
+  initialYear,
   onEventClick,
   onDayClick,
   primaryColor = "var(--parent-primary)",
 }: MonthlyViewProps) {
-  const [currentMonth, setCurrentMonth] = useState(initialMonth);
+  // ברירת מחדל: היום הנוכחי
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(initialMonth ?? today.getMonth() + 1);
+  const [currentYear, setCurrentYear]   = useState(initialYear  ?? today.getFullYear());
 
-  const monthIdx = SCHOOL_YEAR_MONTHS.indexOf(currentMonth);
-  const monthLabel = MONTHS_HE[monthIdx];
-  const year = currentMonth >= 9 ? 2025 : 2026;
-  const daysInMonth = getDaysInMonth(year, currentMonth);
-  const firstDay    = getFirstDayOfMonth(year, currentMonth);
+  // עדכון אם props משתנים
+  useEffect(() => {
+    if (initialMonth !== undefined) setCurrentMonth(initialMonth);
+    if (initialYear  !== undefined) setCurrentYear(initialYear);
+  }, [initialMonth, initialYear]);
+
+  const monthLabel  = MONTH_NAMES_FULL[currentMonth - 1];
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDay    = getFirstDayOfMonth(currentYear, currentMonth);
 
   const monthHolidays = useMemo(() =>
     HOLIDAYS.filter(h => h.month === currentMonth)
@@ -55,27 +78,32 @@ export default function MonthlyView({
 
   function eventsForDay(day: number): MonthEvent[] {
     return events.filter(e => {
-      // אירוע חופף ליום הזה
+      // בדוק התאמת שנה - אם יש startYear/endYear
+      const evStartYear = e.startYear ?? (e.startMonth >= 9 ? 2025 : 2026);
+      const evEndYear   = e.endYear   ?? (e.endMonth   >= 9 ? 2025 : 2026);
+
       if (e.startMonth === currentMonth && e.endMonth === currentMonth) {
+        if (evStartYear !== currentYear) return false;
         const sd = e.startDay || 1;
         const ed = e.endDay   || sd;
         return day >= sd && day <= ed;
       }
       if (e.startMonth === currentMonth) {
+        if (evStartYear !== currentYear) return false;
         const sd = e.startDay || 1;
         return day >= sd;
       }
       if (e.endMonth === currentMonth) {
+        if (evEndYear !== currentYear) return false;
         const ed = e.endDay || daysInMonth;
         return day <= ed;
       }
-      // חודש ביניים באירוע רב-חודשי
-      const inBetween = (() => {
-        const startIdx = SCHOOL_YEAR_MONTHS.indexOf(e.startMonth);
-        const endIdx   = SCHOOL_YEAR_MONTHS.indexOf(e.endMonth);
-        return startIdx < monthIdx && monthIdx < endIdx;
-      })();
-      return inBetween;
+      // חודש ביניים
+      const beforeEnd = (currentYear < evEndYear) ||
+                        (currentYear === evEndYear && currentMonth < e.endMonth);
+      const afterStart = (currentYear > evStartYear) ||
+                         (currentYear === evStartYear && currentMonth > e.startMonth);
+      return beforeEnd && afterStart;
     });
   }
 
@@ -88,21 +116,47 @@ export default function MonthlyView({
   }
 
   function navigateMonth(dir: -1 | 1) {
-    const newIdx = monthIdx + dir;
-    if (newIdx < 0 || newIdx > 11) return;
-    setCurrentMonth(SCHOOL_YEAR_MONTHS[newIdx]);
+    let newMonth = currentMonth + dir;
+    let newYear  = currentYear;
+    if (newMonth < 1) {
+      newMonth = 12;
+      newYear -= 1;
+    } else if (newMonth > 12) {
+      newMonth = 1;
+      newYear += 1;
+    }
+    setCurrentMonth(newMonth);
+    setCurrentYear(newYear);
   }
 
-  // בניית מערך תאים: cells יכלול ריבועים ריקים בתחילת החודש
+  function goToToday() {
+    const t = new Date();
+    setCurrentMonth(t.getMonth() + 1);
+    setCurrentYear(t.getFullYear());
+  }
+
+  // בניית מערך תאים
   const cells: ({ day: number } | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d });
-  // השלמה לרשת מלאה
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === currentMonth;
+  const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth;
   const todayDay = isCurrentMonth ? today.getDate() : -1;
+  const schoolYearLabel = getSchoolYearLabel(currentYear, currentMonth);
+
+  // 12 חודשים אחורה ו-12 קדימה לבחירה מהירה
+  const monthOptions = useMemo(() => {
+    const opts: { month: number; year: number; label: string }[] = [];
+    for (let i = -6; i <= 18; i++) {
+      let m = today.getMonth() + 1 + i;
+      let y = today.getFullYear();
+      while (m > 12) { m -= 12; y += 1; }
+      while (m < 1)  { m += 12; y -= 1; }
+      opts.push({ month: m, year: y, label: `${MONTH_NAMES_FULL[m - 1]} ${y}` });
+    }
+    return opts;
+  }, []);
 
   return (
     <div style={{ background: "#fff", borderRadius: "var(--radius-lg)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
@@ -111,49 +165,52 @@ export default function MonthlyView({
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "12px 16px", background: "var(--bg-secondary)",
-        borderBottom: "0.5px solid var(--border)",
+        borderBottom: "0.5px solid var(--border)", gap: 8, flexWrap: "wrap",
       }}>
-        <button
-          onClick={() => navigateMonth(-1)}
-          disabled={monthIdx === 0}
-          style={navBtnStyle(monthIdx === 0)}
-        >→ קודם</button>
+        <button onClick={() => navigateMonth(-1)} style={navBtnStyle}>→ קודם</button>
 
-        <div style={{ textAlign: "center" }}>
+        <div style={{ textAlign: "center", flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>
-            {monthLabel} {year}
+            {monthLabel} {currentYear}
           </div>
-          {monthHolidays.length > 0 && (
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-              {monthHolidays.map(h => h.name).join(" · ")}
-            </div>
-          )}
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
+            שנת לימודים {schoolYearLabel}
+            {monthHolidays.length > 0 && ` · ${monthHolidays.map(h => h.name).join(" · ")}`}
+          </div>
         </div>
 
-        <button
-          onClick={() => navigateMonth(1)}
-          disabled={monthIdx === 11}
-          style={navBtnStyle(monthIdx === 11)}
-        >הבא ←</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={goToToday} style={{
+            ...navBtnStyle,
+            background: primaryColor, color: "#fff", borderColor: primaryColor,
+          }}>היום</button>
+          <button onClick={() => navigateMonth(1)} style={navBtnStyle}>הבא ←</button>
+        </div>
       </div>
 
-      {/* בורר חודשים מהיר */}
+      {/* בורר חודש מהיר (12 חודשים אחורה ו-18 קדימה) */}
       <div style={{
         display: "flex", gap: 4, padding: "8px 12px",
         overflowX: "auto", borderBottom: "0.5px solid var(--border)",
         background: "#fff",
       }}>
-        {SCHOOL_YEAR_MONTHS.map((m, i) => (
-          <button key={m} onClick={() => setCurrentMonth(m)} style={{
-            padding: "5px 12px", fontSize: 11, borderRadius: 12,
-            border: "none", cursor: "pointer", whiteSpace: "nowrap",
-            background: currentMonth === m ? primaryColor : "transparent",
-            color:      currentMonth === m ? "#fff" : "var(--text-secondary)",
-            fontWeight: currentMonth === m ? 500 : 400,
-          }}>
-            {MONTHS_HE[i]}
-          </button>
-        ))}
+        {monthOptions.map(opt => {
+          const active = opt.month === currentMonth && opt.year === currentYear;
+          return (
+            <button key={`${opt.year}-${opt.month}`}
+              onClick={() => { setCurrentMonth(opt.month); setCurrentYear(opt.year); }}
+              style={{
+                padding: "5px 12px", fontSize: 11, borderRadius: 12,
+                border: "none", cursor: "pointer", whiteSpace: "nowrap",
+                background: active ? primaryColor : "transparent",
+                color:      active ? "#fff" : "var(--text-secondary)",
+                fontWeight: active ? 500 : 400,
+                fontFamily: "inherit",
+              }}>
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* כותרת ימי שבוע */}
@@ -236,7 +293,6 @@ export default function MonthlyView({
                 )}
               </div>
 
-              {/* אירועים של היום */}
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 {dayEvents.slice(0, 3).map(ev => (
                   <button
@@ -269,11 +325,10 @@ export default function MonthlyView({
   );
 }
 
-const navBtnStyle = (disabled: boolean): React.CSSProperties => ({
+const navBtnStyle: React.CSSProperties = {
   padding: "6px 14px", fontSize: 12, fontFamily: "inherit",
   border: "0.5px solid var(--border)", background: "#fff",
   borderRadius: "var(--radius-md)",
-  cursor: disabled ? "not-allowed" : "pointer",
-  opacity: disabled ? 0.4 : 1,
+  cursor: "pointer",
   color: "var(--text-secondary)",
-});
+};
