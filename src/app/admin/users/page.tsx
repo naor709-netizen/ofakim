@@ -59,10 +59,16 @@ export default function UsersAdminPage() {
     refresh();
   }
 
+  async function approveUser(id: string) {
+    await updateUser(id, { active: true });
+    refresh();
+  }
+
   const grouped = {
-    admin:     users.filter(u => u.role === "admin"),
-    education: users.filter(u => u.role === "staff" && u.department === "education"),
-    youth:     users.filter(u => u.role === "staff" && u.department === "youth"),
+    pending:   users.filter(u => !u.active),
+    admin:     users.filter(u => u.active && u.role === "admin"),
+    education: users.filter(u => u.active && u.role === "staff" && u.department === "education"),
+    youth:     users.filter(u => u.active && u.role === "staff" && u.department === "youth"),
   };
 
   if (!me) return null;
@@ -96,6 +102,9 @@ export default function UsersAdminPage() {
 
         {loading ? <p>טוען...</p> : (
           <>
+            {grouped.pending.length > 0 && (
+              <PendingSection list={grouped.pending} onApprove={approveUser} onEdit={openEdit} onDelete={handleDelete} />
+            )}
             <Section title="🛡 מנהלי-על"  list={grouped.admin}     color="#1A1A1A" onEdit={openEdit} onDelete={handleDelete} />
             <Section title="🔵 מנהל החינוך" list={grouped.education} color="#185FA5" onEdit={openEdit} onDelete={handleDelete} />
             <Section title="🟠 מחלקת הנוער" list={grouped.youth}     color="#D85A30" onEdit={openEdit} onDelete={handleDelete} />
@@ -150,6 +159,66 @@ export default function UsersAdminPage() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PendingSection({ list, onApprove, onEdit, onDelete }: {
+  list: AppUser[]; onApprove: (id: string) => void;
+  onEdit: (u: AppUser) => void; onDelete: (id: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 24, padding: "1rem 1.25rem",
+      background: "linear-gradient(135deg, #FFF8EE 0%, #FAECE7 100%)",
+      borderRadius: "var(--radius-lg)", border: "1px solid #F5C57E" }}>
+      <h3 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 12px", color: "#7C4A0A",
+        display: "flex", alignItems: "center", gap: 8 }}>
+        ⏳ ממתינים לאישור <span style={{
+          fontSize: 11, background: "#7C4A0A", color: "#fff",
+          padding: "2px 8px", borderRadius: 10, fontWeight: 500 }}>
+          {list.length}
+        </span>
+      </h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {list.map(u => (
+          <div key={u.id} style={{
+            background: "#fff", borderRadius: "var(--radius-md)",
+            padding: "12px 14px", border: "0.5px solid var(--border)",
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: u.department === "education" ? "#E6F1FB" : "#FAECE7",
+              color: u.department === "education" ? "#185FA5" : "#D85A30",
+              fontSize: 14, fontWeight: 600,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>{u.full_name[0]}</div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{u.full_name}</div>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                {u.email} · ביקש להצטרף ל-{u.department === "education" ? "מנהל החינוך" : "מחלקת הנוער"}
+              </div>
+            </div>
+            <button onClick={() => onApprove(u.id)} style={{
+              padding: "7px 16px", fontSize: 12, fontWeight: 500,
+              background: "var(--success)", color: "#fff",
+              border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
+            }}>✓ אישור</button>
+            <button onClick={() => onEdit(u)} style={{
+              padding: "7px 12px", fontSize: 12,
+              background: "#fff", border: "0.5px solid var(--border)",
+              borderRadius: "var(--radius-md)", cursor: "pointer",
+            }}>✏️</button>
+            <button onClick={() => onDelete(u.id)} style={{
+              padding: "7px 12px", fontSize: 12,
+              background: "#fff", color: "var(--danger)",
+              border: "0.5px solid var(--border)",
+              borderRadius: "var(--radius-md)", cursor: "pointer",
+            }}>🗑</button>
+          </div>
+        ))}
       </div>
     </div>
   );
