@@ -45,19 +45,26 @@ function LoginContent() {
   async function handleRegister() {
     if (!fullName.trim()) { setError("יש להזין שם מלא"); return; }
     setError(""); setLoading(true);
-    const result = await createUser({
-      email: email.trim(),
-      full_name: fullName.trim(),
-      role: "staff",
-      department,
-    });
-    // עדכון העובד ל-active=false (ממתין לאישור)
-    if (result.data) {
-      await supabase.from("users").update({ active: false }).eq("id", result.data.id);
-    }
+    // יצירה ישירה עם active=false (ממתין לאישור)
+    const { data, error: insertError } = await supabase
+      .from("users")
+      .insert({
+        email:      email.trim().toLowerCase(),
+        full_name:  fullName.trim(),
+        role:       "staff",
+        department,
+        active:     false,
+      })
+      .select()
+      .single();
     setLoading(false);
-    if (result.error) {
-      setError("שגיאה ביצירת חשבון: " + result.error.message);
+    if (insertError) {
+      // אם הוא כבר קיים - בדוק את הסטטוס
+      if (insertError.code === "23505") {
+        setError("המייל הזה כבר רשום במערכת. נסה להיכנס.");
+      } else {
+        setError("שגיאה ביצירת חשבון: " + insertError.message + "\n\nוודא ש-RLS לטבלת users מאופשר ל-INSERT. הרץ את schema-auth.sql ב-Supabase.");
+      }
       return;
     }
     setStep("pending");

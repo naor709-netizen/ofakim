@@ -199,7 +199,7 @@ export default function AdminDashboard() {
         </div>
 
         {activeTab === "overview" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
 
             {/* עמודות לפי חודש */}
             <div style={{ background: "#fff", borderRadius: "var(--radius-lg)", padding: "1.25rem 1.5rem", border: "0.5px solid var(--border)" }}>

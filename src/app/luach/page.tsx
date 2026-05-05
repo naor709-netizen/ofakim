@@ -10,6 +10,8 @@ import { loadProfile } from "@/lib/parent";
 import { supabase } from "@/lib/supabase";
 import { getEvents, type DbEvent } from "@/lib/events";
 import MonthlyView from "@/components/MonthlyView";
+import { generateICal, downloadICal, addToGoogleCalendar, shareWhatsapp } from "@/lib/export";
+import { useToast } from "@/components/Toast";
 
 type AgeFilter = "all" | "0-6" | "elementary" | "secondary" | "families";
 type DeptFilter = "all" | "education" | "youth";
@@ -29,7 +31,16 @@ function getHolidaysForMonth(month: number) {
   return HOLIDAYS.filter(h => h.month === month);
 }
 
+const iconBtnStyle: React.CSSProperties = {
+  padding: "8px 14px", fontSize: 12, fontWeight: 500,
+  borderRadius: 10, border: "0.5px solid var(--border)",
+  background: "#fff", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+  fontFamily: "inherit",
+};
+
 export default function LuachPage() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<DeptFilter>("all");
   const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
@@ -414,30 +425,42 @@ export default function LuachPage() {
                 {selectedEventData.catName}
               </span>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
               <button onClick={() => {
-                const text = `🗓 ${selectedEventData.name}\n📅 ${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}${selectedEventData.location ? `\n📍 ${selectedEventData.location}` : ""}\n\nמתוך לוח אופקים`;
-                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-              }} style={{
-                padding: "6px 14px", fontSize: 12, borderRadius: "var(--radius-md)",
-                border: "0.5px solid var(--border)", background: "#fff",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              }}>
-                📤 שתף בוואטסאפ
+                shareWhatsapp(`🗓 ${selectedEventData.name}\n📅 ${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}${selectedEventData.location ? `\n📍 ${selectedEventData.location}` : ""}\n\nמתוך לוח אופקים`);
+              }} style={iconBtnStyle}>
+                📤 וואטסאפ
               </button>
               <button onClick={() => {
                 const year = selectedEventData.startMonth >= 9 ? 2025 : 2026;
-                const month = String(selectedEventData.startMonth).padStart(2, "0");
-                const day = String(selectedEventData.startDay ?? 1).padStart(2, "0");
-                const date = `${year}${month}${day}`;
-                const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(selectedEventData.name)}&dates=${date}/${date}${selectedEventData.location ? `&location=${encodeURIComponent(selectedEventData.location)}` : ""}`;
-                window.open(url, "_blank");
-              }} style={{
-                padding: "6px 14px", fontSize: 12, borderRadius: "var(--radius-md)",
-                border: "0.5px solid var(--border)", background: "#fff",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              }}>
-                📆 הוסף ליומן
+                addToGoogleCalendar({
+                  title: selectedEventData.name,
+                  location: selectedEventData.location ?? undefined,
+                  startYear: year,
+                  startMonth: selectedEventData.startMonth,
+                  startDay: selectedEventData.startDay ?? 1,
+                  endYear: selectedEventData.endMonth >= 9 ? 2025 : 2026,
+                  endMonth: selectedEventData.endMonth,
+                  endDay: selectedEventData.endDay ?? selectedEventData.startDay ?? 1,
+                });
+              }} style={iconBtnStyle}>
+                📆 Google
+              </button>
+              <button onClick={() => {
+                const year = selectedEventData.startMonth >= 9 ? 2025 : 2026;
+                const ical = generateICal([{
+                  uid: selectedEventData.id,
+                  title: selectedEventData.name,
+                  location: selectedEventData.location ?? undefined,
+                  startYear: year, startMonth: selectedEventData.startMonth, startDay: selectedEventData.startDay ?? 1,
+                  endYear: selectedEventData.endMonth >= 9 ? 2025 : 2026,
+                  endMonth: selectedEventData.endMonth,
+                  endDay: selectedEventData.endDay ?? selectedEventData.startDay ?? 1,
+                }]);
+                downloadICal(`event-${selectedEventData.name}`, ical);
+                toast("הקובץ ירד! פתח אותו והאירוע יתווסף ליומן שלך 📆", "success");
+              }} style={iconBtnStyle}>
+                📥 iCal
               </button>
             </div>
           </div>

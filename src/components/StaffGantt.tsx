@@ -280,8 +280,17 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
   if (!authChecked) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: cfg.bg }}>
-        <p style={{ color: "var(--text-tertiary)", fontSize: 14 }}>טוען...</p>
+      <div style={{ minHeight: "100vh", background: cfg.bg }}>
+        <div style={{ background: cfg.primary, height: 52 }} />
+        <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
+          <div className="skeleton" style={{ height: 80, marginBottom: 16, borderRadius: 14 }} />
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <div className="skeleton" style={{ height: 38, width: 130, borderRadius: 10 }} />
+            <div className="skeleton" style={{ height: 38, width: 200, borderRadius: 10 }} />
+            <div className="skeleton" style={{ flex: 1, height: 38, borderRadius: 10 }} />
+          </div>
+          <div className="skeleton" style={{ height: 400, borderRadius: 14 }} />
+        </div>
       </div>
     );
   }
