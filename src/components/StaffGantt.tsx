@@ -137,9 +137,10 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     })),
   ], [dbEvents]);
 
-  // קטגוריות תצוגה (מ-DB אם נטענו, אחרת מקומיות)
+  // קטגוריות תצוגה — תמיד מ-Supabase. רק אם עוד לא נטענו (טוענים) — fallback מקומי
   type DisplayCat = { id: string; name: string; department: "education" | "youth"; color: string };
-  const allCats: DisplayCat[] = dbCategories.length > 0
+  const dbReady = dbCategories.length > 0;
+  const allCats: DisplayCat[] = dbReady
     ? dbCategories.map(c => ({ id: c.id, name: c.name, department: c.department, color: c.color }))
     : CATEGORIES.map(c => ({ id: c.id as string, name: c.name, department: c.department, color: c.color }));
 
@@ -209,7 +210,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   useEffect(() => {
-    if (myCategories.length && !newEvent.categoryId) {
+    if (myCategories.length && (!newEvent.categoryId || !myCategories.find(c => c.id === newEvent.categoryId))) {
       setNewEvent(p => ({ ...p, categoryId: myCategories[0].id }));
     }
   }, [myCategories, newEvent.categoryId]);
@@ -355,11 +356,14 @@ export default function StaffGantt({ department }: StaffGanttProps) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <button
             onClick={() => setShowNewEvent(true)}
+            disabled={!dbReady}
+            title={!dbReady ? "טוען נתונים..." : ""}
             style={{
-              background: cfg.primary, color: "#fff",
+              background: dbReady ? cfg.primary : "var(--bg-secondary)",
+              color: dbReady ? "#fff" : "var(--text-tertiary)",
               border: "none", padding: "8px 16px",
               borderRadius: "var(--radius-md)", fontSize: 13,
-              fontWeight: 500, cursor: "pointer",
+              fontWeight: 500, cursor: dbReady ? "pointer" : "not-allowed",
               display: "flex", alignItems: "center", gap: 6,
             }}
           >
