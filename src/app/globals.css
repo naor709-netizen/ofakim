@@ -87,3 +87,36 @@ body {
 /* Smooth transitions */
 button { transition: all 0.15s; font-family: inherit; }
 button:active { transform: scale(0.97); }
+
+/* Mobile improvements */
+@media (max-width: 768px) {
+  /* טבלאות וגרידים — אפשר גלילה אופקית */
+  .gantt-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Modal — מילוי מסך מלא */
+  .modal-mobile-full {
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    min-height: 100vh;
+  }
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0eb 25%, #fafaf7 50%, #f0f0eb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+/* Hide scrollbar but keep functionality */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+

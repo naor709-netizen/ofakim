@@ -48,7 +48,7 @@ export default function UsersAdminPage() {
           role:       editing.role as "admin" | "staff",
           department: (editing.department as "education" | "youth" | null) ?? null,
         });
-    if (result.error) { alert("שגיאה: " + result.error.message + "\n\nבדוק שהרצת את schema-auth.sql"); return; }
+    if (result.error) { alert("שגיאה: " + result.error.message); return; }
     setShowForm(false); setEditing(null);
     refresh();
   }

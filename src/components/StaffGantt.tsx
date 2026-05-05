@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { getCategories, getEvents, createEvent, updateEvent, deleteEvent, type DbEvent, type DbCategory } from "@/lib/events";
 import { logAudit, getInfrastructures, type Infrastructure } from "@/lib/infrastructure";
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
+import { useToast } from "@/components/Toast";
 
 interface StaffGanttProps {
   department: Department;
@@ -69,6 +70,7 @@ const SCHOOL_YEARS = [
 export default function StaffGantt({ department }: StaffGanttProps) {
   const cfg = DEPT_CONFIG[department];
   const router = useRouter();
+  const { toast } = useToast();
   const [user, setUser] = useState<AppUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
@@ -243,8 +245,11 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       ? await updateEvent(editingId, payload)
       : await createEvent(payload);
     setCreating(false);
-    if (result.error) { alert("שגיאה: " + result.error.message + "\n\nאם כתוב 'column start_year does not exist' — צריך להריץ את schema-years.sql ב-Supabase"); return; }
-    // לוג שינויים
+    if (result.error) {
+      toast("שגיאה: " + result.error.message, "error");
+      return;
+    }
+    toast(editingId ? "האירוע עודכן בהצלחה ✨" : "האירוע נוצר בהצלחה ✨", "success");
     logAudit({
       user_name:  user?.full_name ?? null,
       event_id:   result.data?.id ?? null,
@@ -260,10 +265,11 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("למחוק את האירוע?")) return;
+    if (!confirm("למחוק את האירוע? לא ניתן לשחזר.")) return;
     const ev = allViewEvents.find(e => e.id === id);
     const { error } = await deleteEvent(id);
-    if (error) { alert("שגיאה במחיקה: " + error.message + "\n\nבדוק שהרצת את ה-RLS SQL ב-Supabase"); return; }
+    if (error) { toast("שגיאה במחיקה: " + error.message, "error"); return; }
+    toast("האירוע נמחק", "success");
     if (ev) logAudit({
       user_name: user?.full_name ?? null,
       event_id: id, event_name: ev.name, action: "delete", department: department,

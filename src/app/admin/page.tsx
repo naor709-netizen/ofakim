@@ -7,11 +7,93 @@ import { DEMO_EVENTS, CATEGORIES, MONTHS_HE, SCHOOL_YEAR_MONTHS } from "@/lib/da
 import { getEvents, type DbEvent } from "@/lib/events";
 import { getAuditLog, type AuditEntry } from "@/lib/infrastructure";
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
+import { useToast } from "@/components/Toast";
+
+function exportToCSV(events: DbEvent[]) {
+  const headers = ["שם האירוע", "תחום", "מחלקה", "תאריך התחלה", "תאריך סיום", "מיקום", "אחראי", "קהל יעד", "סטטוס"];
+  const rows = events.map(e => [
+    e.name,
+    e.categories?.name || "",
+    e.categories?.department === "education" ? "מנהל החינוך" : e.categories?.department === "youth" ? "מחלקת הנוער" : "",
+    `${e.start_day || 1}/${e.start_month}/${e.start_year || 2025}`,
+    `${e.end_day || 1}/${e.end_month}/${e.end_year || 2025}`,
+    e.location || "",
+    e.responsible || "",
+    (e.age_groups || []).join(", "),
+    e.status === "published" ? "מפורסם" : "טיוטה",
+  ]);
+
+  const csv = "﻿" + [headers, ...rows]
+    .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ofakim-events-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function printEvents(events: DbEvent[]) {
+  const html = `
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>אירועים - עיריית אופקים</title>
+<style>
+  body { font-family: 'Heebo', Arial, sans-serif; padding: 20px; direction: rtl; }
+  h1 { color: #185FA5; border-bottom: 2px solid #185FA5; padding-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { padding: 8px 12px; text-align: right; border: 1px solid #ddd; font-size: 12px; }
+  th { background: #f4f4f0; font-weight: 600; }
+  .edu { color: #185FA5; }
+  .youth { color: #D85A30; }
+  @media print { body { padding: 10px; } }
+</style>
+</head>
+<body>
+  <h1>📅 לוח אירועים — עיריית אופקים</h1>
+  <p><strong>תאריך הדפסה:</strong> ${new Date().toLocaleDateString("he-IL")} · <strong>סה"כ אירועים:</strong> ${events.length}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>שם</th><th>תחום</th><th>מחלקה</th><th>תאריך</th><th>מיקום</th><th>אחראי</th><th>קהל יעד</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${events.map(e => `
+        <tr>
+          <td>${e.name}</td>
+          <td>${e.categories?.name || ""}</td>
+          <td class="${e.categories?.department === "education" ? "edu" : "youth"}">${e.categories?.department === "education" ? "חינוך" : "נוער"}</td>
+          <td>${e.start_day || 1}/${e.start_month}${e.end_month !== e.start_month ? ` – ${e.end_day || 1}/${e.end_month}` : ""}</td>
+          <td>${e.location || "—"}</td>
+          <td>${e.responsible || "—"}</td>
+          <td>${(e.age_groups || []).join(", ")}</td>
+        </tr>
+      `).join("")}
+    </tbody>
+  </table>
+</body>
+</html>`;
+  const w = window.open("", "_blank");
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  }
+}
 
 const DEPT_COLORS = { education: "#185FA5", youth: "#D85A30" };
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { toast } = useToast();
   const [user, setUser] = useState<AppUser | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "log">("overview");
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
@@ -265,15 +347,19 @@ export default function AdminDashboard() {
         )}
 
         {/* ייצוא */}
-        <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-          <button style={{
-            padding: "8px 16px", fontSize: 12, borderRadius: "var(--radius-md)",
+        <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => { printEvents(dbEvents); toast("נפתח חלון הדפסה — אפשר לשמור כ-PDF", "info"); }} style={{
+            padding: "10px 18px", fontSize: 13, fontWeight: 500,
+            borderRadius: "var(--radius-md)",
             border: "0.5px solid var(--border)", background: "#fff", cursor: "pointer",
-          }}>📄 ייצוא PDF</button>
-          <button style={{
-            padding: "8px 16px", fontSize: 12, borderRadius: "var(--radius-md)",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>📄 הדפסה / PDF</button>
+          <button onClick={() => { exportToCSV(dbEvents); toast("הקובץ ירד למחשב!", "success"); }} style={{
+            padding: "10px 18px", fontSize: 13, fontWeight: 500,
+            borderRadius: "var(--radius-md)",
             border: "0.5px solid var(--border)", background: "#fff", cursor: "pointer",
-          }}>📊 ייצוא Excel</button>
+            display: "flex", alignItems: "center", gap: 6,
+          }}>📊 ייצוא לאקסל (CSV)</button>
         </div>
       </div>
     </div>
