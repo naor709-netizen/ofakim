@@ -581,11 +581,12 @@ export default function StaffGantt({ department }: StaffGanttProps) {
         )}
 
         {/* פרטי אירוע שנבחר */}
-        {selectedEventData && selectedCat && (
-          <div style={{
+        {selectedEventData && (
+          <div ref={el => { if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }} style={{
             padding: "1.25rem 1.5rem", marginBottom: 16,
-            background: "#fff", border: `1.5px solid ${selectedCat.color}`,
+            background: "#fff", border: `2px solid ${selectedCat?.color || cfg.primary}`,
             borderRadius: "var(--radius-lg)", position: "relative",
+            boxShadow: `0 8px 24px ${selectedCat?.color || cfg.primary}22`,
           }}>
             <button onClick={() => setSelectedEvent(null)} style={{
               position: "absolute", left: 12, top: 12,
@@ -593,9 +594,17 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               background: "var(--bg-secondary)", borderRadius: "50%",
               cursor: "pointer", fontSize: 16,
             }}>×</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: selectedCat.color }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: selectedCat?.color || cfg.primary, flexShrink: 0 }} />
               <h2 style={{ fontSize: 17, fontWeight: 500, margin: 0 }}>{selectedEventData.name}</h2>
+              {selectedCat && (
+                <span style={{
+                  fontSize: 11, padding: "2px 8px", borderRadius: 10,
+                  background: selectedCat.color + "22", color: selectedCat.color,
+                }}>
+                  {selectedCat.name}
+                </span>
+              )}
               <span style={{
                 fontSize: 11, padding: "2px 8px", borderRadius: 10,
                 background: selectedEventData.status === "published" ? "#DCFCE7" : "#FEF9C3",
@@ -611,16 +620,21 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               </span>
               {selectedEventData.location   && <span>📍 {selectedEventData.location}</span>}
               {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
-              <span>👥 {selectedEventData.ageGroups.join(", ")}</span>
+              {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => selectedEventData && startEdit(selectedEventData)} style={{
-                padding: "6px 14px", fontSize: 12, borderRadius: "var(--radius-md)",
+                padding: "10px 20px", fontSize: 13, fontWeight: 500,
+                borderRadius: "var(--radius-md)",
                 background: cfg.primary, color: "#fff", border: "none", cursor: "pointer",
-              }}>✏️ ערוך</button>
+                display: "flex", alignItems: "center", gap: 6,
+              }}>✏️ ערוך אירוע</button>
               <button onClick={() => handleDelete(selectedEventData.id)} style={{
-                padding: "6px 14px", fontSize: 12, borderRadius: "var(--radius-md)",
-                background: "#fff", border: "0.5px solid var(--border)", cursor: "pointer",
+                padding: "10px 20px", fontSize: 13, fontWeight: 500,
+                borderRadius: "var(--radius-md)",
+                background: "#fff", color: "var(--danger)",
+                border: `1px solid var(--danger)`, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6,
               }}>🗑 מחק</button>
             </div>
           </div>
