@@ -50,6 +50,52 @@ export default function LuachPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // המרת אירועי DB לפורמט תצוגה אחיד עם צבעי קטגוריות מקומיים (לפי שם)
+  type ViewEv = {
+    id: string; name: string;
+    catName: string; catColor: string; catDept: "education" | "youth";
+    startMonth: number; endMonth: number;
+    startDay: number | null; endDay: number | null;
+    location: string | null; responsible: string | null;
+    ageGroups: string[]; status: string;
+  };
+
+  function localCatByName(name: string, dept?: string) {
+    return CATEGORIES.find(c => c.name === name && (!dept || c.department === dept));
+  }
+
+  const allViewEvents: ViewEv[] = useMemo(() => {
+    if (dbEvents.length > 0) {
+      return dbEvents.map(e => {
+        const dbDept = (e.categories?.department as "education" | "youth") || "education";
+        const local = localCatByName(e.categories?.name || "", dbDept);
+        return {
+          id: e.id, name: e.name,
+          catName: e.categories?.name || "ללא תחום",
+          catColor: local?.color || "#888",
+          catDept: dbDept,
+          startMonth: e.start_month, endMonth: e.end_month,
+          startDay: e.start_day, endDay: e.end_day,
+          location: e.location, responsible: e.responsible,
+          ageGroups: e.age_groups || [], status: e.status,
+        };
+      });
+    }
+    // fallback: DEMO_EVENTS
+    return DEMO_EVENTS.map(e => {
+      const cat = CATEGORIES.find(c => c.id === e.categoryId);
+      return {
+        id: e.id, name: e.name,
+        catName: cat?.name || "ללא", catColor: cat?.color || "#888",
+        catDept: cat?.department || "education",
+        startMonth: e.startMonth, endMonth: e.endMonth,
+        startDay: e.startDay ?? null, endDay: e.endDay ?? null,
+        location: e.location ?? null, responsible: e.responsible ?? null,
+        ageGroups: e.ageGroups, status: e.status,
+      };
+    });
+  }, [dbEvents]);
+
   const educationCats = CATEGORIES.filter(c => c.department === "education");
   const youthCats     = CATEGORIES.filter(c => c.department === "youth");
 
@@ -60,22 +106,16 @@ export default function LuachPage() {
   }, [deptFilter]);
 
   const filteredEvents = useMemo(() => {
-    return DEMO_EVENTS.filter(e => {
+    return allViewEvents.filter(e => {
       if (e.status !== "published") return false;
-      const cat = CATEGORIES.find(c => c.id === e.categoryId);
-      if (!cat) return false;
-      if (deptFilter !== "all" && cat.department !== deptFilter) return false;
-      if (!visibleCategories.find(c => c.id === e.categoryId)) return false;
+      if (deptFilter !== "all" && e.catDept !== deptFilter) return false;
       if (search && !e.name.includes(search)) return false;
       return true;
     });
-  }, [deptFilter, visibleCategories, search]);
+  }, [allViewEvents, deptFilter, search]);
 
   const selectedEventData = selectedEvent
-    ? DEMO_EVENTS.find(e => e.id === selectedEvent)
-    : null;
-  const selectedCat = selectedEventData
-    ? CATEGORIES.find(c => c.id === selectedEventData.categoryId)
+    ? allViewEvents.find(e => e.id === selectedEvent)
     : null;
 
   // חישוב מיקום אירוע בגאנט (אחוזים)
@@ -223,34 +263,14 @@ export default function LuachPage() {
         {/* תצוגה חודשית */}
         {view === "monthly" && (
           <MonthlyView
-            events={(dbEvents.length > 0
-              ? dbEvents.map(e => {
-                  const cat = CATEGORIES.find(c => c.name === e.categories?.name && c.department === e.categories?.department);
-                  return {
-                    id: e.id, name: e.name,
-                    categoryId: e.category_id,
-                    startMonth: e.start_month, endMonth: e.end_month,
-                    startDay: e.start_day, endDay: e.end_day,
-                    color: e.categories?.color || cat?.color || "#888",
-                    ageGroups: e.age_groups || [],
-                    location: e.location,
-                  };
-                })
-              : DEMO_EVENTS.map(e => {
-                  const cat = CATEGORIES.find(c => c.id === e.categoryId);
-                  return {
-                    id: e.id, name: e.name, categoryId: e.categoryId,
-                    startMonth: e.startMonth, endMonth: e.endMonth,
-                    startDay: e.startDay, endDay: e.endDay,
-                    color: cat?.color || "#888",
-                    ageGroups: e.ageGroups, location: e.location,
-                  };
-                })
-            ).filter(e => {
-              if (deptFilter === "all") return true;
-              const cat = CATEGORIES.find(c => c.id === e.categoryId || c.name === e.categoryId);
-              return cat?.department === deptFilter;
-            })}
+            events={filteredEvents.map(e => ({
+              id: e.id, name: e.name,
+              categoryId: e.catName,
+              startMonth: e.startMonth, endMonth: e.endMonth,
+              startDay: e.startDay, endDay: e.endDay,
+              color: e.catColor,
+              ageGroups: e.ageGroups, location: e.location,
+            }))}
             onEventClick={id => setSelectedEvent(id)}
             primaryColor="var(--parent-primary)"
           />
@@ -301,7 +321,7 @@ export default function LuachPage() {
 
           {/* שורות קטגוריות */}
           {visibleCategories.map(cat => {
-            const catEvents = filteredEvents.filter(e => e.categoryId === cat.id);
+            const catEvents = filteredEvents.filter(e => e.catName === cat.name && e.catDept === cat.department);
             return (
               <div key={cat.id} style={{
                 display: "grid", gridTemplateColumns: "110px repeat(12, 1fr)",
@@ -360,10 +380,10 @@ export default function LuachPage() {
         )}
 
         {/* חלון פרטי אירוע */}
-        {selectedEventData && selectedCat && (
+        {selectedEventData && (
           <div style={{
             marginTop: 16, padding: "1.25rem 1.5rem",
-            background: "#fff", border: `1.5px solid ${selectedCat.color}`,
+            background: "#fff", border: `1.5px solid ${selectedEventData.catColor}`,
             borderRadius: "var(--radius-lg)", position: "relative",
           }}>
             <button
@@ -377,33 +397,42 @@ export default function LuachPage() {
               }}
             >×</button>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: selectedCat.color, flexShrink: 0 }} />
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: selectedEventData.catColor, flexShrink: 0 }} />
               <h2 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--text-primary)" }}>
                 {selectedEventData.name}
               </h2>
             </div>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 13, color: "var(--text-secondary)" }}>
-              <span>📅 {MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}
-                {selectedEventData.endMonth !== selectedEventData.startMonth
-                  ? ` – ${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.endMonth)]}`
-                  : ""}
+              <span>📅 {selectedEventData.startDay ? `${selectedEventData.startDay} ` : ""}{MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}
+                {(selectedEventData.endMonth !== selectedEventData.startMonth || (selectedEventData.endDay && selectedEventData.endDay !== selectedEventData.startDay))
+                  ? ` – ${selectedEventData.endDay ? `${selectedEventData.endDay} ` : ""}${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.endMonth)]}` : ""}
               </span>
               {selectedEventData.location && <span>📍 {selectedEventData.location}</span>}
               {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
-              <span>👥 {selectedEventData.ageGroups.join(", ")}</span>
-              <span style={{ padding: "2px 8px", borderRadius: 10, background: selectedCat.color + "22", color: selectedCat.color, fontWeight: 500 }}>
-                {selectedCat.name}
+              {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
+              <span style={{ padding: "2px 8px", borderRadius: 10, background: selectedEventData.catColor + "22", color: selectedEventData.catColor, fontWeight: 500 }}>
+                {selectedEventData.catName}
               </span>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button style={{
+              <button onClick={() => {
+                const text = `🗓 ${selectedEventData.name}\n📅 ${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}${selectedEventData.location ? `\n📍 ${selectedEventData.location}` : ""}\n\nמתוך לוח אופקים`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+              }} style={{
                 padding: "6px 14px", fontSize: 12, borderRadius: "var(--radius-md)",
                 border: "0.5px solid var(--border)", background: "#fff",
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
               }}>
                 📤 שתף בוואטסאפ
               </button>
-              <button style={{
+              <button onClick={() => {
+                const year = selectedEventData.startMonth >= 9 ? 2025 : 2026;
+                const month = String(selectedEventData.startMonth).padStart(2, "0");
+                const day = String(selectedEventData.startDay ?? 1).padStart(2, "0");
+                const date = `${year}${month}${day}`;
+                const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(selectedEventData.name)}&dates=${date}/${date}${selectedEventData.location ? `&location=${encodeURIComponent(selectedEventData.location)}` : ""}`;
+                window.open(url, "_blank");
+              }} style={{
                 padding: "6px 14px", fontSize: 12, borderRadius: "var(--radius-md)",
                 border: "0.5px solid var(--border)", background: "#fff",
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
