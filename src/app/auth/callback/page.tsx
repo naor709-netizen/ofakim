@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import { getUserByEmail, saveSession, createUser, type AppUser } from "@/lib/auth";
+import { fetchProfile } from "@/lib/parent";
 
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intendedDept = searchParams.get("dept");
+  // `next` is set by /luach/login to route residents back into the parent flow.
+  const nextUrl = searchParams.get("next");
   const [error, setError] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [status, setStatus] = useState("מתחבר...");
@@ -17,7 +19,22 @@ function AuthCallbackContent() {
   useEffect(() => {
     let cancelled = false;
 
+    async function routeResident() {
+      const profile = await fetchProfile();
+      if (cancelled) return;
+      if (profile) router.replace("/luach/my");
+      else         router.replace("/luach/onboarding");
+    }
+
     async function processSession(email: string, fullName: string) {
+      // If the login originated from /luach/login, treat as resident regardless of staff table.
+      if (nextUrl && nextUrl.startsWith("/luach")) {
+        setStatus("טוען את הפרופיל שלך...");
+        await routeResident();
+        return;
+      }
+
+
       setStatus("בודק הרשאות...");
       let appUser: AppUser | null = await getUserByEmail(email);
       if (cancelled) return;
@@ -49,12 +66,26 @@ function AuthCallbackContent() {
       else                                          router.replace("/");
     }
 
-    // אם יש קוד OAuth ב-URL, החלף אותו ל-session
     (async () => {
       const url = new URL(window.location.href);
+
+      // Supabase returns errors via the URL hash (e.g. expired magic link).
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+      const hashParams = new URLSearchParams(hash);
+      const hashError = hashParams.get("error");
+      const hashErrorCode = hashParams.get("error_code");
+      if (hashError) {
+        if (hashErrorCode === "otp_expired") {
+          setError("הקישור פג תוקף או שכבר השתמשת בו.\nחזור לדף ההתחברות ובקש קישור חדש.");
+        } else {
+          setError("ההתחברות נכשלה: " + (hashParams.get("error_description") || hashError));
+        }
+        return;
+      }
+
       const code = url.searchParams.get("code");
       if (code) {
-        setStatus("מאמת מול Google...");
+        setStatus("מאמת...");
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
           setError("שגיאה באימות: " + error.message);
@@ -66,19 +97,17 @@ function AuthCallbackContent() {
         return s.user.user_metadata?.full_name || s.user.user_metadata?.name || s.user.email?.split("@")[0] || "משתמש חדש";
       }
 
-      // בדיקה ראשונית
+
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.email) {
         processSession(session.user.email, nameFromSession(session));
         return;
       }
 
-      // המתנה ל-session דרך listener (במקרה שהוא לא עלה מיד)
       const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user?.email) processSession(session.user.email, nameFromSession(session));
       });
 
-      // טיימאאוט: אם תוך 5 שניות לא הגיע session - שגיאה
       setTimeout(() => {
         if (cancelled) return;
         subscription.subscription.unsubscribe();
@@ -120,11 +149,11 @@ function AuthCallbackContent() {
             <div style={{ fontSize: 40, marginBottom: 12 }}>🚫</div>
             <h2 style={{ fontSize: 18, color: "var(--danger)", margin: "0 0 12px" }}>שגיאה בהתחברות</h2>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "pre-line", marginBottom: 20, lineHeight: 1.6 }}>{error}</p>
-            <button onClick={() => router.push("/login")} style={{
+            <button onClick={() => router.push("/luach/login")} style={{
               padding: "10px 22px", fontSize: 13, fontWeight: 500,
               background: "#1A1A1A", color: "#fff", border: "none",
               borderRadius: "var(--radius-md)", cursor: "pointer",
-            }}>חזרה למסך ההתחברות</button>
+            }}>בקש קישור חדש</button>
           </>
         ) : (
           <>
