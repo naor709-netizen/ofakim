@@ -9,6 +9,7 @@ import { getAuditLog, type AuditEntry } from "@/lib/infrastructure";
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
 import { TopBar } from "@/components/v3/TopBar";
+import { NotificationBell } from "@/components/v3/NotificationBell";
 
 function exportToCSV(events: DbEvent[]) {
   const headers = ["שם האירוע", "תחום", "מחלקה", "תאריך התחלה", "תאריך סיום", "מיקום", "אחראי", "קהל יעד", "סטטוס"];
@@ -162,9 +163,12 @@ export default function AdminDashboard() {
         title="דשבורד מנהלי"
         subtitle="ADMIN · CONTROL"
         rightContent={
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            🛡 מנהל-על
-          </span>
+          <>
+            <NotificationBell adminOnly />
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+              🛡 מנהל-על
+            </span>
+          </>
         }
       />
 
