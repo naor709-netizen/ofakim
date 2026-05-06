@@ -157,12 +157,18 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   const filteredEvents = useMemo(() => {
+    const searchLower = search.trim().toLowerCase();
     return allViewEvents.filter(e => {
       const cat = allCats.find(c => c.id === e.categoryId);
       if (!cat) return false;
       if (!visibleCats.find(c => c.id === e.categoryId)) return false;
-      if (search && !e.name.includes(search)) return false;
-      // סינון לפי שנת לימודים
+      if (searchLower) {
+        const haystack = [
+          e.name, e.location, e.responsible,
+          ...(e.ageGroups || []), cat.name,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(searchLower)) return false;
+      }
       if (eventSchoolYear(e) !== schoolYear) return false;
       return true;
     });
@@ -330,31 +336,40 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
       <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* Hello Bar */}
+        {/* Hello Bar V3 */}
         <div style={{
           background: `linear-gradient(135deg, ${cfg.lighter} 0%, #FFF8EE 100%)`,
-          borderRadius: "var(--radius-lg)", padding: "1rem 1.5rem",
+          borderRadius: "var(--r-lg)", padding: "1.25rem 1.5rem",
           marginBottom: 16, display: "flex", alignItems: "center",
-          justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+          justifyContent: "space-between", flexWrap: "wrap", gap: 14,
+          position: "relative", overflow: "hidden",
         }}>
-          <div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 2px" }}>{cfg.greeting}</p>
-            <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, color: cfg.primaryDark }}>
-              גאנט {SCHOOL_YEARS.find(y => y.id === schoolYear)?.label.split(" ")[0] || "השנה"} ☀️
+          <div style={{ position: "absolute", top: -40, left: -40, width: 140, height: 140, borderRadius: "50%", background: cfg.light, filter: "blur(40px)", opacity: 0.5 }} />
+          <div style={{ position: "relative" }}>
+            <span className="eyebrow" style={{ color: cfg.primaryDark, fontSize: 10 }}>
+              {user?.full_name ? `שלום, ${user.full_name}` : "ברוכים הבאים"} · {new Date().toLocaleDateString("he-IL", { weekday: "long" })}
+            </span>
+            <h1 className="disp" style={{ fontSize: 28, margin: "4px 0 4px", color: cfg.primaryDark }}>
+              גאנט {SCHOOL_YEARS.find(y => y.id === schoolYear)?.label.split(" ")[0] || "השנה"}
             </h1>
+            <p style={{ fontSize: 12, color: cfg.primaryDark, opacity: 0.75, margin: 0 }}>
+              לחץ על "+ אירוע חדש" כדי להוסיף, או לחץ על אירוע קיים לערוך
+            </p>
           </div>
-          <div style={{ display: "flex", gap: 16 }}>
+          <div style={{ display: "flex", gap: 10, position: "relative" }}>
             {[
-              { label: "אירועים השנה", value: myEvents.length },
-              { label: "החודש הנוכחי",  value: thisMonthEvs.length },
+              { label: "אירועים", value: myEvents.length },
+              { label: "החודש",  value: thisMonthEvs.length },
+              { label: "סה״כ",   value: allViewEvents.length },
             ].map(s => (
               <div key={s.label} style={{
                 textAlign: "center", background: "#fff",
-                borderRadius: "var(--radius-md)", padding: "8px 18px",
+                borderRadius: 12, padding: "10px 16px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                minWidth: 70,
               }}>
-                <div style={{ fontSize: 22, fontWeight: 600, color: cfg.primary }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{s.label}</div>
+                <div className="num" style={{ fontSize: 22, fontWeight: 700, color: cfg.primary, lineHeight: 1 }}>{s.value}</div>
+                <div className="eyebrow" style={{ marginTop: 4, fontSize: 9 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -378,20 +393,26 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             + אירוע חדש
           </button>
 
-          <select
-            value={schoolYear}
-            onChange={e => setSchoolYear(Number(e.target.value))}
-            style={{
-              padding: "7px 11px", fontSize: 12,
-              border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
-              fontFamily: "inherit", background: "#fff", outline: "none",
-              cursor: "pointer", color: cfg.primaryDark, fontWeight: 500,
-            }}
-          >
+          {/* בורר שנת לימודים בולט */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: cfg.lighter, padding: "4px 6px",
+            borderRadius: 10, border: `1px solid ${cfg.light}`,
+          }}>
+            <span style={{ fontSize: 10, color: cfg.primaryDark, fontWeight: 600, paddingRight: 4 }}>📅 שנת לימודים</span>
             {SCHOOL_YEARS.map(y => (
-              <option key={y.id} value={y.id}>{y.label}</option>
+              <button key={y.id} onClick={() => setSchoolYear(y.id)} style={{
+                padding: "5px 10px", fontSize: 12, fontWeight: 500,
+                background: schoolYear === y.id ? cfg.primary : "transparent",
+                color:      schoolYear === y.id ? "#fff" : cfg.primaryDark,
+                border: "none", borderRadius: 7,
+                cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}>
+                {y.label.split(" ")[0]}
+              </button>
             ))}
-          </select>
+          </div>
 
           <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
             {([{ id: "annual", label: "שנתי" }, { id: "monthly", label: "חודשי" }] as const).map(v => (
@@ -423,16 +444,27 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             ))}
           </div>
 
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="חיפוש אירוע..."
-            style={{
-              flex: 1, minWidth: 180, padding: "7px 12px", fontSize: 13,
-              border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
-              background: "#fff", fontFamily: "inherit", outline: "none",
-            }}
-          />
+          <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 חיפוש אירוע, אחראי או מיקום..."
+              style={{
+                width: "100%", padding: "8px 12px 8px 30px", fontSize: 13,
+                border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                background: "#fff", fontFamily: "inherit", outline: "none",
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} style={{
+                position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+                width: 20, height: 20, borderRadius: "50%",
+                background: "var(--bg-secondary)", border: "none",
+                cursor: "pointer", fontSize: 12, color: "var(--text-tertiary)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>×</button>
+            )}
+          </div>
 
           <Link href="/luach" style={{
             padding: "7px 14px", fontSize: 12,

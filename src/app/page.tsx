@@ -87,8 +87,8 @@ export default function LandingPage() {
             </span>
           </h1>
           <p style={{ fontSize: 16, color: "var(--ink2)", marginTop: 22, maxWidth: 580, lineHeight: 1.55 }}>
-            הגאנט של מנהל החינוך ומחלקת הנוער, ולוח קהילתי לתושבים — מסתנכרנים בזמן אמת,
-            נגישים מכל מקום, בנויים בעברית מהקרקע.
+            לוח אירועים שנתי לעיריית אופקים — מסתנכרן בזמן אמת בין עובדי מנהל החינוך,
+            עובדי מחלקת הנוער ולוח קהילתי פתוח לכל התושבים.
           </p>
 
           <div style={{ display: "flex", gap: 8, marginTop: 26, flexWrap: "wrap" }}>

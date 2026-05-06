@@ -40,15 +40,12 @@ export function TopBar({
         display: "flex", alignItems: "center", gap: 12,
         textDecoration: "none", color: "inherit",
       }}>
-        <div style={{
-          width: 40, height: 40,
-          background: variant === "neutral" ? "transparent" : "rgba(255,255,255,0.95)",
-          borderRadius: 8, padding: variant === "neutral" ? 0 : 4,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Image src="/logo-ofakim.png" alt="עיריית אופקים"
-            width={32} height={32} style={{ objectFit: "contain" }} />
-        </div>
+        <Image src="/logo-ofakim.png" alt="עיריית אופקים"
+          width={36} height={36}
+          style={{
+            objectFit: "contain",
+            filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none",
+          }} />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
           <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-display)" }}>
             {title || "פורטל אופקים"}
@@ -68,17 +65,14 @@ export function TopBar({
         <>
           <div style={{
             width: 1, height: 28,
-            background: variant === "neutral" ? "var(--line)" : "rgba(255,255,255,0.25)",
+            background: variant === "neutral" ? "var(--line)" : "rgba(255,255,255,0.3)",
           }} />
-          <div style={{
-            background: variant === "neutral" ? "transparent" : "rgba(255,255,255,0.95)",
-            borderRadius: 8, padding: variant === "neutral" ? 0 : 4,
-            display: "flex", alignItems: "center",
-          }}>
-            <Image src="/logo-ofaktivi.png" alt="אופקטיבי"
-              width={88} height={32}
-              style={{ objectFit: "contain", height: 28, width: "auto" }} />
-          </div>
+          <Image src="/logo-ofaktivi.png" alt="אופקטיבי"
+            width={92} height={32}
+            style={{
+              objectFit: "contain", height: 30, width: "auto",
+              filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none",
+            }} />
         </>
       )}
 
