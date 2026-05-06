@@ -289,7 +289,8 @@ export default function LuachPage() {
 
         {/* גאנט שנתי */}
         {view === "annual" && (
-        <div style={{ border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+        <div className="gantt-scroll-x" style={{ border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+        <div style={{ minWidth: 800 }}>
           {/* כותרת חודשים */}
           <div style={{ display: "grid", gridTemplateColumns: "110px repeat(12, 1fr)", borderBottom: "0.5px solid var(--border)", background: "var(--bg-secondary)" }}>
             <div style={{ padding: "8px 12px", fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }} />
@@ -387,6 +388,7 @@ export default function LuachPage() {
               </div>
             );
           })}
+        </div>
         </div>
         )}
 

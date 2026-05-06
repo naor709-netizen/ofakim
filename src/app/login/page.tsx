@@ -45,8 +45,8 @@ function LoginContent() {
   async function handleRegister() {
     if (!fullName.trim()) { setError("יש להזין שם מלא"); return; }
     setError(""); setLoading(true);
-    // יצירה ישירה עם active=false (ממתין לאישור)
-    const { data, error: insertError } = await supabase
+    // הוספה ישירה ללא select() — בשביל לעקוף RLS על read
+    const { error: insertError } = await supabase
       .from("users")
       .insert({
         email:      email.trim().toLowerCase(),
@@ -54,16 +54,15 @@ function LoginContent() {
         role:       "staff",
         department,
         active:     false,
-      })
-      .select()
-      .single();
+      });
     setLoading(false);
     if (insertError) {
-      // אם הוא כבר קיים - בדוק את הסטטוס
       if (insertError.code === "23505") {
-        setError("המייל הזה כבר רשום במערכת. נסה להיכנס.");
+        setError("המייל הזה כבר רשום במערכת. אם הבקשה שלך עדיין ממתינה לאישור — חכה למנהל-העל.");
+      } else if (insertError.code === "42501" || insertError.message.includes("policy") || insertError.message.includes("RLS")) {
+        setError("המערכת עדיין לא מאפשרת הרשמה עצמית. פנה למנהל-העל שיוסיף לכם ידנית, או שיריץ את schema-all-new.sql ב-Supabase.");
       } else {
-        setError("שגיאה ביצירת חשבון: " + insertError.message + "\n\nוודא ש-RLS לטבלת users מאופשר ל-INSERT. הרץ את schema-auth.sql ב-Supabase.");
+        setError("שגיאה: " + insertError.message);
       }
       return;
     }

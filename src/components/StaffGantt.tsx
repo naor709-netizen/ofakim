@@ -490,7 +490,8 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
         {/* גאנט שנתי */}
         {view === "annual" && (
-        <div style={{ border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 16 }}>
+        <div className="gantt-scroll-x" style={{ border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ minWidth: 900 }}>
 
           {/* כותרת חודשים */}
           <div style={{ display: "grid", gridTemplateColumns: "120px repeat(12, 1fr)", borderBottom: "0.5px solid var(--border)", background: "var(--bg-secondary)" }}>
@@ -592,6 +593,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               </div>
             );
           })}
+        </div>
         </div>
         )}
 
