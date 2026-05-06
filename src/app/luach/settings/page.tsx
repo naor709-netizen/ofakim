@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loadProfile, saveProfile, clearProfile, INTEREST_AREAS, GRADES, type ParentProfile, type Child } from "@/lib/parent";
+import { fetchProfile, upsertProfile, getCurrentUser, signOutResident, INTEREST_AREAS, GRADES, type ParentProfile, type Child } from "@/lib/parent";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -11,9 +11,17 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const p = loadProfile();
-    if (!p) { router.push("/luach/onboarding"); return; }
-    setProfile(p);
+    let active = true;
+    (async () => {
+      const user = await getCurrentUser();
+      if (!active) return;
+      if (!user) { router.push("/luach/login"); return; }
+      const p = await fetchProfile();
+      if (!active) return;
+      if (!p) { router.push("/luach/onboarding"); return; }
+      setProfile(p);
+    })();
+    return () => { active = false; };
   }, [router]);
 
   if (!profile) return null;
@@ -23,17 +31,21 @@ export default function SettingsPage() {
     setProfile({ ...profile, [key]: value });
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!profile) return;
-    saveProfile(profile);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    const res = await upsertProfile(profile);
+    if (res.ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } else {
+      alert("שמירה נכשלה: " + (res.error || "שגיאה"));
+    }
   }
 
-  function handleReset() {
-    if (!confirm("לאפס את הפרופיל ולהתחיל מחדש?")) return;
-    clearProfile();
-    router.push("/luach/onboarding");
+  async function handleReset() {
+    if (!confirm("להתנתק מהחשבון?")) return;
+    await signOutResident();
+    router.push("/luach");
   }
 
   return (

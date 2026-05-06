@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GRADES, INTEREST_AREAS, saveProfile, type Child } from "@/lib/parent";
+import { GRADES, INTEREST_AREAS, saveProfile, upsertProfile, getCurrentUser, type Child } from "@/lib/parent";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -15,6 +15,15 @@ export default function OnboardingPage() {
   const [notif, setNotif] = useState({ whatsapp: true, emailWeekly: true, reminders: false });
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  // Pre-fill email from authenticated user (so the field shows their login email).
+  useEffect(() => {
+    getCurrentUser().then(u => {
+      if (u?.email) setEmail(prev => prev || u.email!);
+    });
+  }, []);
 
   const totalSteps = 4;
 
@@ -31,11 +40,29 @@ export default function OnboardingPage() {
     setInterests(i => i.includes(id) ? i.filter(x => x !== id) : [...i, id]);
   }
 
-  function finish() {
-    saveProfile({
+  async function finish() {
+    const profile = {
       familyName, neighborhood, children, interests,
       notifications: notif, email, phone,
-    });
+    };
+    setSaveError("");
+    setSaving(true);
+
+    const user = await getCurrentUser();
+    if (!user) {
+      // Not authenticated — keep a draft locally and send to login.
+      saveProfile(profile);
+      setSaving(false);
+      router.push("/luach/login?next=/luach/onboarding");
+      return;
+    }
+
+    const res = await upsertProfile(profile);
+    setSaving(false);
+    if (!res.ok) {
+      setSaveError("שמירה נכשלה: " + (res.error || "שגיאה לא ידועה"));
+      return;
+    }
     router.push("/luach/my");
   }
 
@@ -261,6 +288,17 @@ export default function OnboardingPage() {
           )}
         </div>
 
+        {/* Save error */}
+        {saveError && (
+          <div style={{
+            marginTop: 12, padding: "8px 12px",
+            background: "#FEF2F2", border: "1px solid #FCA5A5",
+            borderRadius: "var(--radius-md)", fontSize: 12, color: "#991B1B",
+          }}>
+            {saveError}
+          </div>
+        )}
+
         {/* Navigation */}
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
           {step > 1 && (
@@ -274,16 +312,16 @@ export default function OnboardingPage() {
           )}
           <button
             onClick={() => step < totalSteps ? setStep(step + 1) : finish()}
-            disabled={!canNext}
+            disabled={!canNext || saving}
             style={{
               flex: 1, padding: "10px 20px", fontSize: 14, fontWeight: 500,
               borderRadius: "var(--radius-md)", border: "none",
-              background: canNext ? "var(--parent-primary)" : "var(--bg-secondary)",
-              color:      canNext ? "#fff" : "var(--text-tertiary)",
-              cursor: canNext ? "pointer" : "not-allowed",
+              background: canNext && !saving ? "var(--parent-primary)" : "var(--bg-secondary)",
+              color:      canNext && !saving ? "#fff" : "var(--text-tertiary)",
+              cursor: canNext && !saving ? "pointer" : "not-allowed",
             }}
           >
-            {step < totalSteps ? "המשך ←" : "סיום ולוח אישי 🎉"}
+            {saving ? "שומר..." : step < totalSteps ? "המשך ←" : "סיום ולוח אישי 🎉"}
           </button>
         </div>
 

@@ -6,7 +6,7 @@ import {
   CATEGORIES, DEMO_EVENTS, MONTHS_HE, SCHOOL_YEAR_MONTHS,
   HOLIDAYS, type CategoryId, type Department,
 } from "@/lib/data";
-import { loadProfile } from "@/lib/parent";
+import { loadProfile, getCurrentUser, fetchProfile } from "@/lib/parent";
 import { supabase } from "@/lib/supabase";
 import { getEvents, type DbEvent } from "@/lib/events";
 import MonthlyView from "@/components/MonthlyView";
@@ -51,7 +51,14 @@ export default function LuachPage() {
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
 
   useEffect(() => {
+    // Quick local check first for snappy UX, then verify against Supabase.
     setHasProfile(!!loadProfile());
+    (async () => {
+      const user = await getCurrentUser();
+      if (!user) return;
+      const p = await fetchProfile();
+      setHasProfile(!!p);
+    })();
     getEvents().then(setDbEvents);
     const channel = supabase
       .channel("luach-events")

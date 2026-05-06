@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loadProfile, clearProfile, INTEREST_AREAS, type ParentProfile } from "@/lib/parent";
+import { loadProfile, fetchProfile, getCurrentUser, signOutResident, INTEREST_AREAS, type ParentProfile } from "@/lib/parent";
 import { CATEGORIES, DEMO_EVENTS, MONTHS_HE, SCHOOL_YEAR_MONTHS, HOLIDAYS } from "@/lib/data";
 import { supabase } from "@/lib/supabase";
 import { getEvents, type DbEvent } from "@/lib/events";
@@ -39,9 +39,30 @@ export default function MyCalendarPage() {
   const [activeChild, setActiveChild] = useState<string>("all");
 
   useEffect(() => {
-    const p = loadProfile();
-    if (!p) { router.push("/luach/onboarding"); return; }
-    setProfile(p);
+    let active = true;
+
+    (async () => {
+      const user = await getCurrentUser();
+      if (!active) return;
+
+      if (!user) {
+        // Not authenticated — if a local draft exists, send through login;
+        // otherwise straight to onboarding.
+        const draft = loadProfile();
+        router.push(draft ? "/luach/login" : "/luach/onboarding");
+        return;
+      }
+
+      const dbProfile = await fetchProfile();
+      if (!active) return;
+
+      if (!dbProfile) {
+        // Logged in but no profile yet — go to onboarding.
+        router.push("/luach/onboarding");
+        return;
+      }
+      setProfile(dbProfile);
+    })();
 
     getEvents().then(setDbEvents);
     const channel = supabase
@@ -50,7 +71,7 @@ export default function MyCalendarPage() {
         getEvents().then(setDbEvents);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { active = false; supabase.removeChannel(channel); };
   }, [router]);
 
   // איחוד מקור נתונים: DB אם יש, אחרת Demo
@@ -220,9 +241,13 @@ export default function MyCalendarPage() {
           <Link href="/luach" style={{ fontSize: 12, color: "var(--text-secondary)", textDecoration: "none" }}>
             ← לוח כללי לכולם
           </Link>
-          <button onClick={() => { if (confirm("לאפס את הפרופיל?")) { clearProfile(); router.push("/luach"); } }}
+          <button onClick={async () => {
+              if (!confirm("להתנתק מהחשבון?")) return;
+              await signOutResident();
+              router.push("/luach");
+            }}
             style={{ fontSize: 11, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>
-            איפוס פרופיל
+            התנתק
           </button>
         </div>
       </div>
