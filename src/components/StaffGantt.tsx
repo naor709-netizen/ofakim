@@ -477,6 +477,47 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </Link>
         </div>
 
+        {/* אירועים קרובים — Quick View */}
+        {(() => {
+          const upcoming = filteredEvents
+            .filter(e => {
+              const t = new Date();
+              const tMonth = t.getMonth() + 1;
+              return e.startMonth === tMonth || e.startMonth === (tMonth % 12) + 1;
+            })
+            .slice(0, 5);
+          if (upcoming.length === 0) return null;
+          return (
+            <div style={{
+              background: "#fff", border: "0.5px solid var(--line)",
+              borderRadius: 12, padding: "12px 14px", marginBottom: 12,
+              display: "flex", alignItems: "center", gap: 10, overflowX: "auto",
+            }} className="no-scrollbar">
+              <span className="eyebrow" style={{ flexShrink: 0, fontSize: 9 }}>
+                ⚡ אירועים קרובים
+              </span>
+              {upcoming.map(ev => {
+                const cat = allCats.find(c => c.id === ev.categoryId);
+                return (
+                  <button key={ev.id} onClick={() => setSelectedEvent(ev.id)} style={{
+                    flexShrink: 0, padding: "5px 10px", fontSize: 11,
+                    border: `1px solid ${cat?.color || cfg.primary}33`,
+                    background: `${cat?.color || cfg.primary}11`,
+                    color: cat?.color || cfg.primaryDark, fontWeight: 500,
+                    borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
+                    fontFamily: "inherit",
+                  }}>
+                    <span className="num" style={{ marginLeft: 4 }}>
+                      {ev.startDay || 1}/{ev.startMonth}
+                    </span>
+                    {ev.name}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         {/* מקרא */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10, fontSize: 11, color: "var(--text-tertiary)" }}>
           {visibleCats.map(cat => (
