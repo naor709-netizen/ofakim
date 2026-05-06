@@ -6,6 +6,7 @@ import {
   getInfrastructures, createInfrastructure, updateInfrastructure, deleteInfrastructure,
   type Infrastructure,
 } from "@/lib/infrastructure";
+import { TopBar } from "@/components/v3/TopBar";
 
 const INFRA_TYPES = ["אולם", "מועדון", "אולם ספורט", "בית ספר", "גן", "מרחב חוץ", "אחר"];
 
@@ -67,15 +68,19 @@ export default function InfrastructuresPage() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafaf7" }}>
-      {/* Top bar */}
-      <div style={{ background: "#1A1A1A", color: "#fff", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/admin" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "none", fontSize: 13 }}>→ דשבורד</Link>
-          <span style={{ color: "rgba(255,255,255,0.2)" }}>|</span>
-          <span style={{ fontSize: 15, fontWeight: 500 }}>מאגר תשתיות</span>
-        </div>
-      </div>
+    <div style={{ minHeight: "100vh", background: "var(--paper)" }}>
+      <TopBar
+        variant="admin"
+        title="מאגר תשתיות"
+        subtitle="VENUES · INFRASTRUCTURE"
+        rightContent={
+          <Link href="/admin" style={{
+            color: "rgba(255,255,255,0.85)", textDecoration: "none",
+            fontSize: 12, padding: "6px 12px",
+            background: "rgba(255,255,255,0.15)", borderRadius: 8,
+          }}>← דשבורד</Link>
+        }
+      />
 
       <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
 

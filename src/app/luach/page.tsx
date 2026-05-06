@@ -12,6 +12,7 @@ import { getEvents, type DbEvent } from "@/lib/events";
 import MonthlyView from "@/components/MonthlyView";
 import { generateICal, downloadICal, addToGoogleCalendar, shareWhatsapp } from "@/lib/export";
 import { useToast } from "@/components/Toast";
+import { TopBar } from "@/components/v3/TopBar";
 
 type AgeFilter = "all" | "0-6" | "elementary" | "secondary" | "families";
 type DeptFilter = "all" | "education" | "youth";
@@ -140,33 +141,24 @@ export default function LuachPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafaf7", padding: "20px" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", background: "#fff", padding: 24, borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-
-        {/* כותרת */}
-        <div style={{
-          background: "var(--parent-lighter)", borderRadius: "var(--radius-lg)",
-          padding: "1.25rem 1.5rem", marginBottom: "1rem",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
-        }}>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 4px", color: "#04342C" }}>
-              לוח אירועים – חינוך ונוער אופקים
-            </h1>
-            <p style={{ fontSize: 13, color: "var(--parent-primary-dark)", margin: 0 }}>
-              מתעדכן בזמן אמת על ידי עובדי הרשות · תשפ״ו
-            </p>
-          </div>
+    <div style={{ minHeight: "100vh", background: "var(--paper)" }}>
+      <TopBar
+        variant="parent"
+        title="לוח קהילתי"
+        subtitle="LUACH · קהילתי · תשפ״ו"
+        rightContent={
           <Link href={hasProfile ? "/luach/my" : "/luach/onboarding"} style={{
-            background: "#fff", color: "var(--parent-primary-dark)",
-            padding: "8px 14px", borderRadius: "var(--radius-md)",
-            border: "0.5px solid var(--parent-light)",
-            textDecoration: "none", fontSize: 13, fontWeight: 500,
+            background: "rgba(255,255,255,0.95)", color: "var(--parent-d)",
+            padding: "7px 14px", borderRadius: 8,
+            textDecoration: "none", fontSize: 12, fontWeight: 500,
             display: "flex", alignItems: "center", gap: 6,
           }}>
             {hasProfile ? "👨‍👩‍👧 הלוח שלי" : "✨ התאמה אישית"}
           </Link>
-        </div>
+        }
+      />
+      <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ background: "#fff", padding: 20, borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
 
         {/* באנר אונבורדינג */}
         {!hasProfile && (
@@ -482,6 +474,7 @@ export default function LuachPage() {
             </Link>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

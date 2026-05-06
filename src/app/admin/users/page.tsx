@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getAllUsers, createUser, updateUser, deleteUser, loadSession, type AppUser } from "@/lib/auth";
+import { TopBar } from "@/components/v3/TopBar";
 
 export default function UsersAdminPage() {
   const router = useRouter();
@@ -74,14 +75,19 @@ export default function UsersAdminPage() {
   if (!me) return null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafaf7" }}>
-      <div style={{ background: "#1A1A1A", color: "#fff", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/admin" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "none", fontSize: 13 }}>→ דשבורד</Link>
-          <span style={{ color: "rgba(255,255,255,0.2)" }}>|</span>
-          <span style={{ fontSize: 15, fontWeight: 500 }}>ניהול עובדים</span>
-        </div>
-      </div>
+    <div style={{ minHeight: "100vh", background: "var(--paper)" }}>
+      <TopBar
+        variant="admin"
+        title="ניהול עובדים"
+        subtitle="USERS · MANAGE"
+        rightContent={
+          <Link href="/admin" style={{
+            color: "rgba(255,255,255,0.85)", textDecoration: "none",
+            fontSize: 12, padding: "6px 12px",
+            background: "rgba(255,255,255,0.15)", borderRadius: 8,
+          }}>← דשבורד</Link>
+        }
+      />
 
       <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>

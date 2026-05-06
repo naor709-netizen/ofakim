@@ -14,6 +14,7 @@ import { getCategories, getEvents, createEvent, updateEvent, deleteEvent, type D
 import { logAudit, getInfrastructures, type Infrastructure } from "@/lib/infrastructure";
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
+import { TopBar } from "@/components/v3/TopBar";
 
 interface StaffGanttProps {
   department: Department;
@@ -298,42 +299,34 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   return (
     <div style={{ minHeight: "100vh", background: cfg.bg }}>
 
-      {/* סרגל עליון */}
-      <div style={{
-        background: cfg.primary, color: "#fff",
-        padding: "0 24px", height: 52,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/" style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none", fontSize: 13 }}>
-            → פורטל אופקים
-          </Link>
-          <span style={{ color: "rgba(255,255,255,0.3)" }}>|</span>
-          <span style={{ fontSize: 15, fontWeight: 500 }}>{cfg.label}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {user && (
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)" }}>
-              {user.full_name}
-            </span>
-          )}
-          <div style={{
-            width: 30, height: 30, borderRadius: "50%",
-            background: "rgba(255,255,255,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 13, fontWeight: 500,
-          }}>
-            {user?.full_name[0] || "?"}
-          </div>
-          <button onClick={handleLogout} title="יציאה" style={{
-            background: "rgba(255,255,255,0.15)", color: "#fff",
-            border: "none", padding: "4px 10px", fontSize: 11,
-            borderRadius: "var(--radius-sm)", cursor: "pointer", fontFamily: "inherit",
-          }}>
-            יציאה
-          </button>
-        </div>
-      </div>
+      {/* סרגל עליון V3 */}
+      <TopBar
+        variant={department === "education" ? "edu" : "youth"}
+        title={cfg.label}
+        subtitle={department === "education" ? "EDUCATION · GANTT" : "YOUTH · GANTT"}
+        rightContent={
+          <>
+            {user && (
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: "rgba(255,255,255,0.2)",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 12, fontWeight: 600,
+                }}>{user.full_name[0]}</span>
+                {user.full_name}
+              </span>
+            )}
+            <button onClick={handleLogout} style={{
+              background: "rgba(255,255,255,0.18)", color: "#fff",
+              border: "none", padding: "6px 12px", fontSize: 11,
+              borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+            }}>
+              יציאה
+            </button>
+          </>
+        }
+      />
 
       <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
 

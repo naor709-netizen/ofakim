@@ -8,6 +8,7 @@ import { getEvents, type DbEvent } from "@/lib/events";
 import { getAuditLog, type AuditEntry } from "@/lib/infrastructure";
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
+import { TopBar } from "@/components/v3/TopBar";
 
 function exportToCSV(events: DbEvent[]) {
   const headers = ["שם האירוע", "תחום", "מחלקה", "תאריך התחלה", "תאריך סיום", "מיקום", "אחראי", "קהל יעד", "סטטוס"];
@@ -155,17 +156,17 @@ export default function AdminDashboard() {
   const ACTION_LABELS = { create: "יצר אירוע", update: "עדכן אירוע", delete: "מחק אירוע" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafaf7" }}>
-
-      {/* סרגל עליון */}
-      <div style={{ background: "#1A1A1A", color: "#fff", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "none", fontSize: 13 }}>→ פורטל אופקים</Link>
-          <span style={{ color: "rgba(255,255,255,0.2)" }}>|</span>
-          <span style={{ fontSize: 15, fontWeight: 500 }}>דשבורד מנהלי</span>
-        </div>
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>מנהל-על</span>
-      </div>
+    <div style={{ minHeight: "100vh", background: "var(--paper)" }}>
+      <TopBar
+        variant="admin"
+        title="דשבורד מנהלי"
+        subtitle="ADMIN · CONTROL"
+        rightContent={
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+            🛡 מנהל-על
+          </span>
+        }
+      />
 
       <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
 
