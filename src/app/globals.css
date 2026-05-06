@@ -1,0 +1,238 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=Rubik:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* === מערכת צבעים מאוחדת — V3 === */
+  /* מנהל החינוך */
+  --edu: #185FA5; --edu-d: #0C447C; --edu-dd: #042C53;
+  --edu-l: #B5D4F4; --edu-ll: #E6F1FB;
+  /* legacy aliases */
+  --education-primary: var(--edu);
+  --education-primary-dark: var(--edu-d);
+  --education-primary-darker: var(--edu-dd);
+  --education-light: var(--edu-l);
+  --education-lighter: var(--edu-ll);
+
+  /* מחלקת הנוער */
+  --youth: #D85A30; --youth-d: #993C1D;
+  --youth-l: #F5C4B3; --youth-ll: #FAECE7;
+  --youth-primary: var(--youth);
+  --youth-primary-dark: var(--youth-d);
+  --youth-light: var(--youth-l);
+  --youth-lighter: var(--youth-ll);
+
+  /* תושבים / הורים */
+  --parent: #1D9E75; --parent-d: #0F6E56; --parent-dd: #04342C;
+  --parent-l: #9FE1CB; --parent-ll: #E1F5EE;
+  --parent-primary: var(--parent);
+  --parent-primary-dark: var(--parent-d);
+  --parent-primary-darker: var(--parent-dd);
+  --parent-light: var(--parent-l);
+  --parent-lighter: var(--parent-ll);
+
+  /* בוט */
+  --bot: #7F77DD; --bot-d: #534AB7; --bot-ll: #EEEDFE;
+  --bot-primary: var(--bot);
+  --bot-dark: var(--bot-d);
+  --bot-lighter: var(--bot-ll);
+
+  /* ניטרליים */
+  --ink: #1A1A1A; --ink2: #3F3F44; --ink3: #74747c; --ink4: #a8a8b0;
+  --paper: #FAFAF7; --paper2: #F4F4F0;
+  --line: rgba(26,26,26,0.10);
+  --surface: #FFFFFF;
+  /* legacy aliases */
+  --bg-primary: var(--surface);
+  --bg-secondary: var(--paper2);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink2);
+  --text-tertiary: var(--ink3);
+  --border: var(--line);
+
+  /* accent — שימוש מינימלי */
+  --accent: #FFD23F;
+
+  /* רדיוסים */
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+
+  /* גופנים */
+  --font: 'Heebo', system-ui, sans-serif;
+  --font-display: 'Rubik', 'Heebo', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* legacy */
+  --success: var(--parent);
+  --warning: #BA7517;
+  --danger: #C0392B;
+  --info: var(--edu);
+
+  /* קטגוריות חינוך */
+  --cat-early: #1D9E75;
+  --cat-elementary: #185FA5;
+  --cat-secondary: #7F77DD;
+  --cat-camps: #D4537E;
+  --cat-haredi: #888780;
+  --cat-edu-general: #5F5E5A;
+  --cat-training: #BA7517;
+  --cat-breaks: #E8B454;
+  /* קטגוריות נוער */
+  --cat-dream: #D85A30;
+  --cat-social: #BA7517;
+  --cat-meaningful: #1D9E75;
+  --cat-movements: #639922;
+  --cat-prep: #7F77DD;
+  --cat-recreation: #D4537E;
+  --cat-youth-general: #885511;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  direction: rtl;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography helpers */
+.disp { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.025em; line-height: 1.0; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3);
+}
+.num { font-family: var(--font-mono); font-feature-settings: 'tnum'; letter-spacing: -0.02em; }
+
+/* RTL utilities */
+.rtl { direction: rtl; }
+.ltr { direction: ltr; }
+
+/* Smooth transitions */
+button { transition: background .15s, transform .1s, border-color .15s; font-family: inherit; }
+button:active { transform: scale(0.98); }
+
+/* Soft blob — radial-blur background element */
+.softblob {
+  position: absolute; border-radius: 50%; filter: blur(48px);
+  opacity: 0.35; pointer-events: none;
+}
+
+/* Tag system */
+.tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 99px;
+  font-size: 11px; font-weight: 500;
+  background: var(--paper2); color: var(--ink2);
+  border: 0.5px solid var(--line);
+}
+.tag.dot::before { content:''; width:6px; height:6px; border-radius:50%; background: currentColor; opacity:0.7; }
+.tag.solid { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tag.edu { background: var(--edu-ll); color: var(--edu-d); border-color: var(--edu-l); }
+.tag.youth { background: var(--youth-ll); color: var(--youth-d); border-color: var(--youth-l); }
+.tag.parent { background: var(--parent-ll); color: var(--parent-d); border-color: var(--parent-l); }
+.tag.bot { background: var(--bot-ll); color: var(--bot-d); }
+.tag.danger { background: #FFEDEB; color: #B33020; border-color: #F7C2BB; }
+.tag.live::before { animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+/* Buttons */
+.btn-v3 {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: 10px;
+  font-family: var(--font); font-size: 13px; font-weight: 500;
+  border: 0.5px solid var(--line); background: var(--surface);
+  color: var(--ink); cursor: pointer;
+  transition: background .15s, transform .1s, border-color .15s;
+}
+.btn-v3:hover { background: var(--paper2); }
+.btn-v3.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn-v3.primary:hover { background: #2c2c30; }
+.btn-v3.edu { background: var(--edu); color:#fff; border-color: var(--edu); }
+.btn-v3.edu:hover { background: var(--edu-d); }
+.btn-v3.youth { background: var(--youth); color:#fff; border-color: var(--youth); }
+.btn-v3.youth:hover { background: var(--youth-d); }
+.btn-v3.parent { background: var(--parent); color:#fff; border-color: var(--parent); }
+.btn-v3.parent:hover { background: var(--parent-d); }
+.btn-v3.ghost { background: transparent; border-color: transparent; }
+
+/* Form fields */
+.f-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.f-label { font-size: 11px; font-weight: 500; color: var(--ink3); }
+.f-input {
+  padding: 10px 12px; border-radius: 10px;
+  border: 0.5px solid var(--line); background: var(--surface);
+  font-family: var(--font); font-size: 13px; color: var(--ink); outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.f-input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(26,26,26,0.08); }
+
+/* Mobile improvements */
+@media (max-width: 768px) {
+  body { font-size: 15px; }
+  .gantt-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .modal-mobile-full {
+    max-width: 100% !important; margin: 0 !important;
+    border-radius: 0 !important; min-height: 100vh;
+  }
+  /* כפתורים גדולים יותר במובייל */
+  .btn-v3 { padding: 11px 18px; font-size: 14px; }
+  /* שדות קלט גדולים יותר */
+  .f-input { padding: 12px 14px; font-size: 16px; }
+  /* תגיות יותר ברורות */
+  .tag { font-size: 12px; padding: 4px 10px; }
+  /* תצוגה גדולה יותר */
+  .disp { line-height: 1.05; }
+}
+
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+  /* מסמך נושא — מתאים את עצמו */
+  h1 { font-size: 24px !important; line-height: 1.15 !important; }
+  h2 { font-size: 20px !important; }
+  h3 { font-size: 17px !important; }
+}
+
+/* Skeleton loading */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0eb 25%, #fafaf7 50%, #f0f0eb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* === Landing page responsive === */
+.landing-topbar { padding: 18px 36px; }
+.landing-hero   { padding: 60px 60px 36px; }
+.landing-entries { padding: 8px 60px 80px; }
+.landing-footer { padding: 13px 36px; }
+
+@media (max-width: 768px) {
+  .landing-topbar { padding: 14px 18px; }
+  .landing-hero   { padding: 32px 18px 24px; }
+  .landing-entries { padding: 8px 18px 60px; }
+  .landing-footer { padding: 14px 18px; font-size: 10px !important; gap: 10px !important; }
+  .landing-footer span:not(:first-child):not(:last-child) { display: none; }
+}
+
+@media (max-width: 480px) {
+  .landing-topbar { padding: 12px 16px; }
+  .landing-hero   { padding: 28px 16px 20px; }
+  .landing-entries { padding: 8px 16px 50px; }
+}
