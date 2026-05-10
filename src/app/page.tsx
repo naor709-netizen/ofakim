@@ -17,14 +17,14 @@ interface CardConfig {
 
 const CARDS: CardConfig[] = [
   {
-    id: "edu", href: "/login?dept=education",
+    id: "edu", href: "/education",
     label: "מנהל החינוך", sub: "גיל הרך · יסודי · על-יסודי · חרדי · קייטנות · הכשרות",
     pop: "var(--edu)", popLight: "var(--edu-ll)", popMid: "var(--edu-l)", dark: "var(--edu-d)",
     stat: "—", statLbl: "אירועים השנה",
     icon: (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>),
   },
   {
-    id: "youth", href: "/login?dept=youth",
+    id: "youth", href: "/youth",
     label: "מחלקת הנוער", sub: "תנועת חלום · תנועות נוער · מעורבות · מ\"ש · מכינות",
     pop: "var(--youth)", popLight: "var(--youth-ll)", popMid: "var(--youth-l)", dark: "var(--youth-d)",
     stat: "—", statLbl: "תוכניות פעילות",
