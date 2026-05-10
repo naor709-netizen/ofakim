@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getUserByEmail, saveSession, createUser } from "@/lib/auth";
+import { getUserByEmail, saveSession, loadSession, createUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
 function LoginContent() {
@@ -11,6 +11,19 @@ function LoginContent() {
   const params = useSearchParams();
   const intendedDept = params.get("dept");
   const [step, setStep] = useState<"email" | "register" | "pending">("email");
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    const session = loadSession();
+    if (!session || !session.active) {
+      setCheckingSession(false);
+      return;
+    }
+    if (session.role === "admin")              router.replace("/admin");
+    else if (session.department === "education") router.replace("/education");
+    else if (session.department === "youth")     router.replace("/youth");
+    else                                          setCheckingSession(false);
+  }, [router]);
   const [email, setEmail]     = useState("");
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState<"education" | "youth">(
@@ -87,6 +100,16 @@ function LoginContent() {
       options: { redirectTo: `${window.location.origin}/auth/callback?dept=${dept}`, scopes: "email" },
     });
     if (error) setError("Microsoft OAuth עדיין לא מוגדר ב-Supabase.");
+  }
+
+  if (checkingSession) {
+    return (
+      <div style={pageStyle}>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
+          🔐 מאמת...
+        </div>
+      </div>
+    );
   }
 
   // ----- מסך "ממתין לאישור" -----
