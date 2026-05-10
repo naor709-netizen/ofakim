@@ -394,24 +394,31 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </button>
 
           {/* בורר שנת לימודים בולט */}
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: cfg.lighter, padding: "4px 6px",
-            borderRadius: 10, border: `1px solid ${cfg.light}`,
-          }}>
-            <span style={{ fontSize: 10, color: cfg.primaryDark, fontWeight: 600, paddingRight: 4 }}>📅 שנת לימודים</span>
-            {SCHOOL_YEARS.map(y => (
-              <button key={y.id} onClick={() => setSchoolYear(y.id)} style={{
-                padding: "5px 10px", fontSize: 12, fontWeight: 500,
-                background: schoolYear === y.id ? cfg.primary : "transparent",
-                color:      schoolYear === y.id ? "#fff" : cfg.primaryDark,
-                border: "none", borderRadius: 7,
-                cursor: "pointer", fontFamily: "inherit",
-                transition: "all 0.15s",
-              }}>
-                {y.label.split(" ")[0]}
-              </button>
-            ))}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              fontSize: 11, color: "var(--text-secondary)", fontWeight: 500,
+              userSelect: "none",
+            }}>
+              📅 שנת לימודים:
+            </span>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              background: cfg.lighter, padding: "4px",
+              borderRadius: 10, border: `1px solid ${cfg.light}`,
+            }}>
+              {SCHOOL_YEARS.map(y => (
+                <button key={y.id} onClick={() => setSchoolYear(y.id)} style={{
+                  padding: "5px 10px", fontSize: 12, fontWeight: 500,
+                  background: schoolYear === y.id ? cfg.primary : "transparent",
+                  color:      schoolYear === y.id ? "#fff" : cfg.primaryDark,
+                  border: "none", borderRadius: 7,
+                  cursor: "pointer", fontFamily: "inherit",
+                  transition: "all 0.15s",
+                }}>
+                  {y.label.split(" ")[0]}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>

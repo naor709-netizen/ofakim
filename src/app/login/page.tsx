@@ -71,18 +71,20 @@ function LoginContent() {
 
   async function handleGoogleLogin() {
     setError("");
+    const dept = intendedDept === "youth" ? "youth" : "education";
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?dept=${dept}` },
     });
     if (error) setError("Google OAuth עדיין לא מוגדר ב-Supabase. השתמש בכניסה עם מייל בינתיים.");
   }
 
   async function handleMicrosoftLogin() {
     setError("");
+    const dept = intendedDept === "youth" ? "youth" : "education";
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "azure",
-      options: { redirectTo: `${window.location.origin}/auth/callback`, scopes: "email" },
+      options: { redirectTo: `${window.location.origin}/auth/callback?dept=${dept}`, scopes: "email" },
     });
     if (error) setError("Microsoft OAuth עדיין לא מוגדר ב-Supabase.");
   }

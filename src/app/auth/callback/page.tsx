@@ -1,27 +1,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { supabase } from "@/lib/supabase";
-import { getUserByEmail, saveSession } from "@/lib/auth";
+import { getUserByEmail, saveSession, createUser, type AppUser } from "@/lib/auth";
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const intendedDept = searchParams.get("dept");
   const [error, setError] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [status, setStatus] = useState("מתחבר...");
 
   useEffect(() => {
     let cancelled = false;
 
-    async function processSession(email: string) {
+    async function processSession(email: string, fullName: string) {
       setStatus("בודק הרשאות...");
-      const appUser = await getUserByEmail(email);
+      let appUser: AppUser | null = await getUserByEmail(email);
       if (cancelled) return;
+
       if (!appUser) {
+        setStatus("רושם בקשה...");
+        const dept: "education" | "youth" = intendedDept === "youth" ? "youth" : "education";
+        const { data, error: insertError } = await createUser({
+          email, full_name: fullName, role: "staff", department: dept, active: false,
+        });
+        if (insertError || !data) {
+          await supabase.auth.signOut();
+          setError("שגיאה ביצירת בקשה: " + (insertError?.message || "לא ידוע"));
+          return;
+        }
+        appUser = data as AppUser;
+      }
+
+      if (!appUser.active) {
         await supabase.auth.signOut();
-        setError(`המייל ${email} לא רשום במערכת.\n\nפנה למנהל-העל כדי להוסיף אותך,\nאו תעדכן את ה-SQL ב-Supabase כך שיכלול את המייל הזה.`);
+        setPendingEmail(email);
         return;
       }
+
       saveSession(appUser);
       if (appUser.role === "admin")                router.replace("/admin");
       else if (appUser.department === "education") router.replace("/education");
@@ -42,16 +62,20 @@ export default function AuthCallbackPage() {
         }
       }
 
+      function nameFromSession(s: { user: { email?: string; user_metadata?: { full_name?: string; name?: string } } }) {
+        return s.user.user_metadata?.full_name || s.user.user_metadata?.name || s.user.email?.split("@")[0] || "משתמש חדש";
+      }
+
       // בדיקה ראשונית
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.email) {
-        processSession(session.user.email);
+        processSession(session.user.email, nameFromSession(session));
         return;
       }
 
       // המתנה ל-session דרך listener (במקרה שהוא לא עלה מיד)
       const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user?.email) processSession(session.user.email);
+        if (session?.user?.email) processSession(session.user.email, nameFromSession(session));
       });
 
       // טיימאאוט: אם תוך 5 שניות לא הגיע session - שגיאה
@@ -74,7 +98,24 @@ export default function AuthCallbackPage() {
       background: "#fafaf7", padding: 20,
     }}>
       <div style={{ textAlign: "center", maxWidth: 460 }}>
-        {error ? (
+        {pendingEmail ? (
+          <>
+            <div style={{ fontSize: 50, marginBottom: 16 }}>⏳</div>
+            <h2 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 12px", color: "var(--text-primary)" }}>
+              הבקשה שלך התקבלה!
+            </h2>
+            <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 8 }}>
+              הבקשה שלך נשלחה למנהל-העל לאישור.<br/>
+              ברגע שתאושר תוכל להיכנס למערכת.
+            </p>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>📧 {pendingEmail}</p>
+            <button onClick={() => router.push("/")} style={{
+              padding: "10px 22px", fontSize: 13, fontWeight: 500,
+              background: "#1A1A1A", color: "#fff", border: "none",
+              borderRadius: "var(--radius-md)", cursor: "pointer",
+            }}>חזרה לדף הבית</button>
+          </>
+        ) : error ? (
           <>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🚫</div>
             <h2 style={{ fontSize: 18, color: "var(--danger)", margin: "0 0 12px" }}>שגיאה בהתחברות</h2>
@@ -94,4 +135,8 @@ export default function AuthCallbackPage() {
       </div>
     </div>
   );
+}
+
+export default function AuthCallbackPage() {
+  return <Suspense fallback={null}><AuthCallbackContent /></Suspense>;
 }
