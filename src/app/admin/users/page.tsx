@@ -48,6 +48,7 @@ export default function UsersAdminPage() {
           full_name:  editing.full_name,
           role:       editing.role as "admin" | "staff",
           department: (editing.department as "education" | "youth" | null) ?? null,
+          active:     editing.active ?? true,
         });
     if (result.error) { alert("שגיאה: " + result.error.message); return; }
     setShowForm(false); setEditing(null);

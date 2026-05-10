@@ -17,7 +17,6 @@ export async function getUserByEmail(email: string): Promise<AppUser | null> {
     .from("users")
     .select("*")
     .ilike("email", email.toLowerCase())
-    .eq("active", true)
     .maybeSingle();
   if (error || !data) return null;
   return data as AppUser;
@@ -38,13 +37,14 @@ export async function createUser(p: {
   full_name: string;
   role: "admin" | "staff";
   department: "education" | "youth" | null;
+  active?: boolean;
 }) {
   return supabase.from("users").insert({
     email:      p.email.toLowerCase(),
     full_name:  p.full_name,
     role:       p.role,
     department: p.department,
-    active:     true,
+    active:     p.active ?? false,
   }).select().single();
 }
 
