@@ -22,7 +22,6 @@ export default function OnboardingPage() {
   const [children, setChildren]         = useState<Child[]>([{ id: "1", name: "", grade: "א'" }]);
   const [interests, setInterests]       = useState<string[]>([]);
   const [notif, setNotif] = useState({ whatsapp: true, emailWeekly: true, reminders: false });
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
   const totalSteps = 4;
@@ -44,7 +43,7 @@ export default function OnboardingPage() {
     setSaveError("");
     const { error } = await saveProfile({
       familyName, neighborhood, children, interests,
-      notifications: notif, email, phone,
+      notifications: notif, phone,
     });
     if (error) { setSaveError("שגיאה בשמירה: " + error); return; }
     router.push("/luach/my");
@@ -265,14 +264,6 @@ export default function OnboardingPage() {
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   placeholder="מספר טלפון לוואטסאפ"
-                  style={{ ...inputStyle, marginTop: 8 }}
-                />
-              )}
-              {notif.emailWeekly && (
-                <input
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="כתובת אימייל"
                   style={{ ...inputStyle, marginTop: 8 }}
                 />
               )}
