@@ -147,8 +147,9 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     ? dbCategories.map(c => ({ id: c.id, name: c.name, department: c.department, color: c.color }))
     : CATEGORIES.map(c => ({ id: c.id as string, name: c.name, department: c.department, color: c.color }));
 
-  const myCategories = allCats.filter(c => c.department === department);
-  const visibleCats  = filterDept === "mine" ? myCategories : allCats;
+  const myCategories    = allCats.filter(c => c.department === department);
+  const otherCategories = allCats.filter(c => c.department !== department);
+  const visibleCats  = filterDept === "mine" ? myCategories : [...myCategories, ...otherCategories];
 
   // מחזיר את שנת הלימודים של אירוע (שנת ספטמבר שלו)
   function eventSchoolYear(e: ViewEvent): number {
