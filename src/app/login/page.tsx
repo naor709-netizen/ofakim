@@ -92,16 +92,6 @@ function LoginContent() {
     if (error) setError("Google OAuth עדיין לא מוגדר ב-Supabase. השתמש בכניסה עם מייל בינתיים.");
   }
 
-  async function handleMicrosoftLogin() {
-    setError("");
-    const dept = intendedDept === "youth" ? "youth" : "education";
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "azure",
-      options: { redirectTo: `${window.location.origin}/auth/callback?dept=${dept}`, scopes: "email" },
-    });
-    if (error) setError("Microsoft OAuth עדיין לא מוגדר ב-Supabase.");
-  }
-
   if (checkingSession) {
     return (
       <div style={pageStyle}>
@@ -210,11 +200,8 @@ function LoginContent() {
         </div>
 
         <div style={cardStyle}>
-          <button onClick={handleGoogleLogin} style={oauthBtn}>
+          <button onClick={handleGoogleLogin} style={{ ...oauthBtn, marginBottom: 16 }}>
             <GoogleIcon /> כניסה עם Google
-          </button>
-          <button onClick={handleMicrosoftLogin} style={{ ...oauthBtn, marginBottom: 16 }}>
-            <MicrosoftIcon /> כניסה עם Microsoft
           </button>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0" }}>
@@ -310,17 +297,6 @@ function GoogleIcon() {
     </svg>
   );
 }
-function MicrosoftIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 21 21">
-      <rect x="1"  y="1"  width="9" height="9" fill="#F25022"/>
-      <rect x="11" y="1"  width="9" height="9" fill="#7FBA00"/>
-      <rect x="1"  y="11" width="9" height="9" fill="#00A4EF"/>
-      <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
-    </svg>
-  );
-}
-
 export default function LoginPage() {
   return <Suspense fallback={null}><LoginContent /></Suspense>;
 }
