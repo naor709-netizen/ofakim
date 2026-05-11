@@ -3,17 +3,22 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loadProfile, saveProfile, clearProfile, INTEREST_AREAS, GRADES, type ParentProfile, type Child } from "@/lib/parent";
+import { loadProfile, saveProfile, clearProfile, getParentUser, INTEREST_AREAS, GRADES, type ParentProfile } from "@/lib/parent";
 
 export default function SettingsPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<ParentProfile | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
-    const p = loadProfile();
-    if (!p) { router.push("/luach/onboarding"); return; }
-    setProfile(p);
+    (async () => {
+      const user = await getParentUser();
+      if (!user) { router.replace("/luach/login"); return; }
+      const p = await loadProfile();
+      if (!p) { router.replace("/luach/onboarding"); return; }
+      setProfile(p);
+    })();
   }, [router]);
 
   if (!profile) return null;
@@ -23,16 +28,18 @@ export default function SettingsPage() {
     setProfile({ ...profile, [key]: value });
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!profile) return;
-    saveProfile(profile);
+    setSaveError("");
+    const { error } = await saveProfile(profile);
+    if (error) { setSaveError("שגיאה: " + error); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
 
-  function handleReset() {
+  async function handleReset() {
     if (!confirm("לאפס את הפרופיל ולהתחיל מחדש?")) return;
-    clearProfile();
+    await clearProfile();
     router.push("/luach/onboarding");
   }
 
@@ -123,6 +130,12 @@ export default function SettingsPage() {
             </label>
           ))}
         </Section>
+
+        {saveError && (
+          <div style={{ marginBottom: 12, padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "var(--radius-md)", fontSize: 12, color: "#991B1B" }}>
+            {saveError}
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button onClick={handleSave} style={{

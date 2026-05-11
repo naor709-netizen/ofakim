@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loadProfile, clearProfile, INTEREST_AREAS, type ParentProfile } from "@/lib/parent";
+import { loadProfile, clearProfile, signOutParent, getParentUser, INTEREST_AREAS, type ParentProfile } from "@/lib/parent";
 import { CATEGORIES, DEMO_EVENTS, MONTHS_HE, SCHOOL_YEAR_MONTHS, HOLIDAYS } from "@/lib/data";
 import { supabase } from "@/lib/supabase";
 import { getEvents, type DbEvent } from "@/lib/events";
@@ -39,9 +39,13 @@ export default function MyCalendarPage() {
   const [activeChild, setActiveChild] = useState<string>("all");
 
   useEffect(() => {
-    const p = loadProfile();
-    if (!p) { router.push("/luach/onboarding"); return; }
-    setProfile(p);
+    (async () => {
+      const user = await getParentUser();
+      if (!user) { router.replace("/luach/login"); return; }
+      const p = await loadProfile();
+      if (!p) { router.replace("/luach/onboarding"); return; }
+      setProfile(p);
+    })();
 
     getEvents().then(setDbEvents);
     const channel = supabase
@@ -220,10 +224,16 @@ export default function MyCalendarPage() {
           <Link href="/luach" style={{ fontSize: 12, color: "var(--text-secondary)", textDecoration: "none" }}>
             ← לוח כללי לכולם
           </Link>
-          <button onClick={() => { if (confirm("לאפס את הפרופיל?")) { clearProfile(); router.push("/luach"); } }}
-            style={{ fontSize: 11, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>
-            איפוס פרופיל
-          </button>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button onClick={async () => { if (confirm("לאפס את הפרופיל?")) { await clearProfile(); router.push("/luach"); } }}
+              style={{ fontSize: 11, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>
+              איפוס פרופיל
+            </button>
+            <button onClick={async () => { await signOutParent(); router.push("/luach"); }}
+              style={{ fontSize: 11, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>
+              יציאה
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GRADES, INTEREST_AREAS, saveProfile, type Child } from "@/lib/parent";
+import { GRADES, INTEREST_AREAS, saveProfile, getParentUser, type Child } from "@/lib/parent";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const [authChecking, setAuthChecking] = useState(true);
+  const [saveError, setSaveError] = useState("");
   const [step, setStep] = useState(1);
+
+  useEffect(() => {
+    getParentUser().then(user => {
+      if (!user) { router.replace("/luach/login"); return; }
+      setAuthChecking(false);
+    });
+  }, [router]);
   const [familyName, setFamilyName]     = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [children, setChildren]         = useState<Child[]>([{ id: "1", name: "", grade: "א'" }]);
@@ -31,11 +40,13 @@ export default function OnboardingPage() {
     setInterests(i => i.includes(id) ? i.filter(x => x !== id) : [...i, id]);
   }
 
-  function finish() {
-    saveProfile({
+  async function finish() {
+    setSaveError("");
+    const { error } = await saveProfile({
       familyName, neighborhood, children, interests,
       notifications: notif, email, phone,
     });
+    if (error) { setSaveError("שגיאה בשמירה: " + error); return; }
     router.push("/luach/my");
   }
 
@@ -44,6 +55,14 @@ export default function OnboardingPage() {
     (step === 2 && children.some(c => c.name.trim().length > 0)) ||
     (step === 3 && interests.length > 0) ||
     step === 4;
+
+  if (authChecking) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#fafaf7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>🔐 בודק...</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#fafaf7", padding: "24px 16px" }}>
@@ -260,6 +279,12 @@ export default function OnboardingPage() {
             </>
           )}
         </div>
+
+        {saveError && (
+          <div style={{ marginTop: 12, padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "var(--radius-md)", fontSize: 12, color: "#991B1B" }}>
+            {saveError}
+          </div>
+        )}
 
         {/* Navigation */}
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>

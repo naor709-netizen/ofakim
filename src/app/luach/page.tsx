@@ -6,7 +6,7 @@ import {
   CATEGORIES, DEMO_EVENTS, MONTHS_HE, SCHOOL_YEAR_MONTHS,
   HOLIDAYS, type CategoryId, type Department,
 } from "@/lib/data";
-import { loadProfile } from "@/lib/parent";
+import { loadProfile, getParentUser } from "@/lib/parent";
 import { supabase } from "@/lib/supabase";
 import { getEvents, type DbEvent } from "@/lib/events";
 import MonthlyView from "@/components/MonthlyView";
@@ -48,10 +48,18 @@ export default function LuachPage() {
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [view, setView] = useState<"annual" | "monthly">("annual");
   const [hasProfile, setHasProfile] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
 
   useEffect(() => {
-    setHasProfile(!!loadProfile());
+    (async () => {
+      const user = await getParentUser();
+      setIsAuthed(!!user);
+      if (user) {
+        const p = await loadProfile();
+        setHasProfile(!!p);
+      }
+    })();
     getEvents().then(setDbEvents);
     const channel = supabase
       .channel("luach-events")
@@ -147,13 +155,13 @@ export default function LuachPage() {
         title="לוח קהילתי"
         subtitle="LUACH · קהילתי · תשפ״ו"
         rightContent={
-          <Link href={hasProfile ? "/luach/my" : "/luach/onboarding"} style={{
+          <Link href={!isAuthed ? "/luach/login" : hasProfile ? "/luach/my" : "/luach/onboarding"} style={{
             background: "rgba(255,255,255,0.95)", color: "var(--parent-d)",
             padding: "7px 14px", borderRadius: 8,
             textDecoration: "none", fontSize: 12, fontWeight: 500,
             display: "flex", alignItems: "center", gap: 6,
           }}>
-            {hasProfile ? "👨‍👩‍👧 הלוח שלי" : "✨ התאמה אישית"}
+            {!isAuthed ? "🔐 כניסה / התאמה אישית" : hasProfile ? "👨‍👩‍👧 הלוח שלי" : "✨ התאמה אישית"}
           </Link>
         }
       />
@@ -180,7 +188,7 @@ export default function LuachPage() {
                 </div>
               </div>
             </div>
-            <Link href="/luach/onboarding" style={{
+            <Link href={isAuthed ? "/luach/onboarding" : "/luach/login"} style={{
               padding: "6px 14px", fontSize: 12, fontWeight: 500,
               background: "#7C4A0A", color: "#fff",
               borderRadius: "var(--radius-md)", textDecoration: "none",
