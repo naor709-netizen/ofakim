@@ -15,6 +15,7 @@ import { logAudit, getInfrastructures, type Infrastructure } from "@/lib/infrast
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
 import { TopBar } from "@/components/v3/TopBar";
+import { IcsImportModal, type IcsImportPayload } from "@/components/IcsImportModal";
 
 interface StaffGanttProps {
   department: Department;
@@ -183,6 +184,54 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<"annual" | "monthly">("annual");
+
+  // ייבוא ICS
+  const [showImport, setShowImport] = useState(false);
+  const [importFileText, setImportFileText] = useState("");
+  const [importFileName, setImportFileName] = useState("");
+
+  async function handleIcsFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setImportFileText(text);
+      setImportFileName(file.name);
+      setShowImport(true);
+    } catch (err) {
+      toast("שגיאה בקריאת הקובץ: " + (err as Error).message, "error");
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  async function handleIcsImport(payload: IcsImportPayload[]): Promise<{ ok: number; failed: number }> {
+    if (payload.length === 0) return { ok: 0, failed: 0 };
+    const results = await Promise.all(
+      payload.map(p => createEvent(p).then(r => ({ payload: p, result: r })))
+    );
+    const successes = results.filter(x => !x.result.error);
+    const failures = results.filter(x => x.result.error);
+    successes.forEach(s => {
+      logAudit({
+        user_name: user?.full_name ?? null,
+        event_id: s.result.data?.id ?? null,
+        event_name: s.payload.name,
+        action: "create",
+        department: department,
+      }).catch(() => {});
+    });
+    if (successes.length > 0) {
+      toast(
+        `יובאו ${successes.length} אירועים${failures.length ? ` (${failures.length} נכשלו)` : ""} ✨`,
+        failures.length ? "warning" : "success",
+      );
+      getEvents().then(setDbEvents);
+    } else if (failures.length > 0) {
+      toast(`כל ${failures.length} האירועים נכשלו בייבוא`, "error");
+    }
+    return { ok: successes.length, failed: failures.length };
+  }
 
   function ymdToDate(year: number | null | undefined, month: number, day: number): string {
     const y = year ?? (month >= 9 ? 2025 : 2026);
@@ -392,6 +441,30 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             }}
           >
             + אירוע חדש
+          </button>
+
+          <input
+            id={`ics-upload-${department}`}
+            type="file"
+            accept=".ics,text/calendar"
+            onChange={handleIcsFileChange}
+            style={{ display: "none" }}
+          />
+          <button
+            onClick={() => document.getElementById(`ics-upload-${department}`)?.click()}
+            disabled={!dbReady}
+            title={!dbReady ? "טוען נתונים..." : "העלה קובץ ICS לסנכרון אירועים"}
+            style={{
+              background: "#fff", color: dbReady ? cfg.primaryDark : "var(--text-tertiary)",
+              border: `1px solid ${dbReady ? cfg.light : "var(--border)"}`,
+              padding: "8px 14px",
+              borderRadius: "var(--radius-md)", fontSize: 13,
+              fontWeight: 500, cursor: dbReady ? "pointer" : "not-allowed",
+              display: "flex", alignItems: "center", gap: 6,
+              fontFamily: "inherit",
+            }}
+          >
+            📅 ייבוא ICS
           </button>
 
           {/* בורר שנת לימודים בולט */}
@@ -936,6 +1009,20 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </div>
         </div>
       )}
+
+      <IcsImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        fileText={importFileText}
+        fileName={importFileName}
+        categories={myCategories}
+        defaultCategoryId={myCategories[0]?.id ?? ""}
+        onImport={handleIcsImport}
+        primary={cfg.primary}
+        primaryDark={cfg.primaryDark}
+        lighter={cfg.lighter}
+        light={cfg.light}
+      />
 
       <BotChat />
 
