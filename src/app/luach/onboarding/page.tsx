@@ -3,26 +3,27 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GRADES, INTEREST_AREAS, saveProfile, getParentUser, type Child } from "@/lib/parent";
+import { GRADES, INTEREST_AREAS, upsertProfile, getCurrentUser, type Child } from "@/lib/parent";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [authChecking, setAuthChecking] = useState(true);
   const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1);
-
-  useEffect(() => {
-    getParentUser().then(user => {
-      if (!user) { router.replace("/luach/login"); return; }
-      setAuthChecking(false);
-    });
-  }, [router]);
   const [familyName, setFamilyName]     = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [children, setChildren]         = useState<Child[]>([{ id: "1", name: "", grade: "א'" }]);
   const [interests, setInterests]       = useState<string[]>([]);
   const [notif, setNotif] = useState({ whatsapp: true, emailWeekly: true, reminders: false });
   const [phone, setPhone] = useState("");
+
+  useEffect(() => {
+    getCurrentUser().then(user => {
+      if (!user) { router.replace("/luach/login"); return; }
+      setAuthChecking(false);
+    });
+  }, [router]);
 
   const totalSteps = 4;
 
@@ -41,11 +42,13 @@ export default function OnboardingPage() {
 
   async function finish() {
     setSaveError("");
-    const { error } = await saveProfile({
+    setSaving(true);
+    const res = await upsertProfile({
       familyName, neighborhood, children, interests,
       notifications: notif, phone,
     });
-    if (error) { setSaveError("שגיאה בשמירה: " + error); return; }
+    setSaving(false);
+    if (!res.ok) { setSaveError("שמירה נכשלה: " + (res.error || "שגיאה לא ידועה")); return; }
     router.push("/luach/my");
   }
 
@@ -272,7 +275,11 @@ export default function OnboardingPage() {
         </div>
 
         {saveError && (
-          <div style={{ marginTop: 12, padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "var(--radius-md)", fontSize: 12, color: "#991B1B" }}>
+          <div style={{
+            marginTop: 12, padding: "8px 12px",
+            background: "#FEF2F2", border: "1px solid #FCA5A5",
+            borderRadius: "var(--radius-md)", fontSize: 12, color: "#991B1B",
+          }}>
             {saveError}
           </div>
         )}
@@ -290,16 +297,16 @@ export default function OnboardingPage() {
           )}
           <button
             onClick={() => step < totalSteps ? setStep(step + 1) : finish()}
-            disabled={!canNext}
+            disabled={!canNext || saving}
             style={{
               flex: 1, padding: "10px 20px", fontSize: 14, fontWeight: 500,
               borderRadius: "var(--radius-md)", border: "none",
-              background: canNext ? "var(--parent-primary)" : "var(--bg-secondary)",
-              color:      canNext ? "#fff" : "var(--text-tertiary)",
-              cursor: canNext ? "pointer" : "not-allowed",
+              background: canNext && !saving ? "var(--parent-primary)" : "var(--bg-secondary)",
+              color:      canNext && !saving ? "#fff" : "var(--text-tertiary)",
+              cursor: canNext && !saving ? "pointer" : "not-allowed",
             }}
           >
-            {step < totalSteps ? "המשך ←" : "סיום ולוח אישי 🎉"}
+            {saving ? "שומר..." : step < totalSteps ? "המשך ←" : "סיום ולוח אישי 🎉"}
           </button>
         </div>
 

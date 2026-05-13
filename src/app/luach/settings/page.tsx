@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loadProfile, saveProfile, clearProfile, getParentUser, INTEREST_AREAS, GRADES, type ParentProfile } from "@/lib/parent";
+import { fetchProfile, upsertProfile, getCurrentUser, signOutResident, INTEREST_AREAS, GRADES, type ParentProfile, type Child } from "@/lib/parent";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -12,13 +12,17 @@ export default function SettingsPage() {
   const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
+    let active = true;
     (async () => {
-      const user = await getParentUser();
-      if (!user) { router.replace("/luach/login"); return; }
-      const p = await loadProfile();
-      if (!p) { router.replace("/luach/onboarding"); return; }
+      const user = await getCurrentUser();
+      if (!active) return;
+      if (!user) { router.push("/luach/login"); return; }
+      const p = await fetchProfile();
+      if (!active) return;
+      if (!p) { router.push("/luach/onboarding"); return; }
       setProfile(p);
     })();
+    return () => { active = false; };
   }, [router]);
 
   if (!profile) return null;
@@ -30,17 +34,19 @@ export default function SettingsPage() {
 
   async function handleSave() {
     if (!profile) return;
-    setSaveError("");
-    const { error } = await saveProfile(profile);
-    if (error) { setSaveError("שגיאה: " + error); return; }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    const res = await upsertProfile(profile);
+    if (res.ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } else {
+      setSaveError("שמירה נכשלה: " + (res.error || "שגיאה"));
+    }
   }
 
   async function handleReset() {
-    if (!confirm("לאפס את הפרופיל ולהתחיל מחדש?")) return;
-    await clearProfile();
-    router.push("/luach/onboarding");
+    if (!confirm("להתנתק מהחשבון?")) return;
+    await signOutResident();
+    router.push("/luach");
   }
 
   return (
