@@ -185,6 +185,14 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<"annual" | "monthly">("annual");
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    if (mq.matches) setView("monthly");
+    const handler = (e: MediaQueryListEvent) => setView(e.matches ? "monthly" : "annual");
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   // ייבוא ICS
   const [showImport, setShowImport] = useState(false);
   const [importFileText, setImportFileText] = useState("");
@@ -495,7 +503,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             </div>
           </div>
 
-          <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
+          <div className="gantt-desktop-only" style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
             {([{ id: "annual", label: "שנתי" }, { id: "monthly", label: "חודשי" }] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)} style={{
                 background: view === v.id ? "#fff" : "transparent",
@@ -808,15 +816,22 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       {/* מודל יצירת אירוע */}
       {showNewEvent && (
         <div style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
-          padding: 20,
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.35)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+          display: "flex", alignItems: "flex-end", justifyContent: "center",
+          zIndex: 100, padding: "0 0 0 0",
+          animation: "fadeIn 0.18s ease",
         }} onClick={e => { if (e.target === e.currentTarget) { setShowNewEvent(false); setConflictWarning(null); setEditingId(null); }}}>
           <div style={{
-            background: "#fff", borderRadius: "var(--radius-xl)",
-            padding: "1.75rem", width: "100%", maxWidth: 480,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+            background: "#fff",
+            borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
+            padding: "1.75rem", width: "100%", maxWidth: 520,
+            boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
             position: "relative",
+            animation: "slideUp 0.22s cubic-bezier(0.2,0.8,0.2,1)",
+            maxHeight: "92dvh", overflowY: "auto",
           }}>
             <button onClick={() => { setShowNewEvent(false); setConflictWarning(null); setEditingId(null); }} style={{
               position: "absolute", left: 16, top: 16,
@@ -1027,10 +1042,17 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       <BotChat />
 
       <style>{`
+        @keyframes slideUp {
+          from { transform: translateY(100%); opacity: 0; }
+          to   { transform: translateY(0);    opacity: 1; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
         @media (max-width: 768px) {
-          .gantt-table { display: none !important; }
-          .mobile-events { display: flex !important; }
           .hello-bar-stats { display: none !important; }
+          .gantt-desktop-only { display: none !important; }
         }
       `}</style>
     </div>

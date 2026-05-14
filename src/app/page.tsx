@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tag, Eyebrow, SoftBlob } from "@/components/v3/Tag";
+import { supabase } from "@/lib/supabase";
 
 interface CardConfig {
   id: "edu" | "youth" | "parent";
@@ -11,7 +12,7 @@ interface CardConfig {
   label: string;
   sub: string;
   pop: string; popLight: string; popMid: string; dark: string;
-  stat: string; statLbl: string;
+  stat: string | null; statLbl: string;
   icon: React.ReactNode;
 }
 
@@ -20,27 +21,41 @@ const CARDS: CardConfig[] = [
     id: "edu", href: "/education",
     label: "מנהל החינוך", sub: "גיל הרך · יסודי · על-יסודי · חרדי · קייטנות · הכשרות",
     pop: "var(--edu)", popLight: "var(--edu-ll)", popMid: "var(--edu-l)", dark: "var(--edu-d)",
-    stat: "—", statLbl: "אירועים השנה",
+    stat: null, statLbl: "אירועים מפורסמים",
     icon: (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>),
   },
   {
     id: "youth", href: "/youth",
     label: "מחלקת הנוער", sub: "תנועת חלום · תנועות נוער · מעורבות · מ\"ש · מכינות",
     pop: "var(--youth)", popLight: "var(--youth-ll)", popMid: "var(--youth-l)", dark: "var(--youth-d)",
-    stat: "—", statLbl: "תוכניות פעילות",
+    stat: null, statLbl: "תוכניות פעילות",
     icon: (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M14 20c0-2.5 2-4 4-4s3 1 3 3"/></svg>),
   },
   {
     id: "parent", href: "/luach",
     label: "לוח לתושבים", sub: "לוח קהילתי פתוח · ללא הרשמה · בעברית פשוטה",
     pop: "var(--parent)", popLight: "var(--parent-ll)", popMid: "var(--parent-l)", dark: "var(--parent-d)",
-    stat: "פתוח", statLbl: "לכלל הציבור",
+    stat: "פתוח" as string | null, statLbl: "לכלל הציבור",
     icon: (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>),
   },
 ];
 
 export default function LandingPage() {
   const [hover, setHover] = useState<string | null>(null);
+  const [stats, setStats] = useState({ edu: 0, youth: 0 });
+
+  useEffect(() => {
+    supabase
+      .from("events")
+      .select("category_id, categories!inner(department)")
+      .eq("status", "published")
+      .then(({ data }) => {
+        if (!data) return;
+        const edu   = data.filter((e: { categories: { department: string } }) => e.categories?.department === "education").length;
+        const youth = data.filter((e: { categories: { department: string } }) => e.categories?.department === "youth").length;
+        setStats({ edu, youth });
+      });
+  }, []);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--paper)", direction: "rtl", color: "var(--ink)" }}>
@@ -154,7 +169,11 @@ export default function LandingPage() {
                 }}>
                   <div>
                     <div className="num" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, color: c.dark }}>
-                      {c.stat}
+                      {c.stat !== null
+                        ? c.stat
+                        : c.id === "edu"   ? (stats.edu   || "…")
+                        : c.id === "youth" ? (stats.youth || "…")
+                        : "—"}
                     </div>
                     <div className="eyebrow" style={{ marginTop: 4, fontSize: 9, color: c.dark, opacity: 0.65 }}>
                       {c.statLbl}
