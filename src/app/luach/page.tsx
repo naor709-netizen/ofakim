@@ -8,7 +8,7 @@ import {
 } from "@/lib/data";
 import { loadProfile, getParentUser } from "@/lib/parent";
 import { supabase } from "@/lib/supabase";
-import { getEvents, type DbEvent } from "@/lib/events";
+import { getEvents, getCategories, type DbEvent, type DbCategory } from "@/lib/events";
 import MonthlyView from "@/components/MonthlyView";
 import { generateICal, downloadICal, addToGoogleCalendar, shareWhatsapp } from "@/lib/export";
 import { useToast } from "@/components/Toast";
@@ -50,6 +50,7 @@ export default function LuachPage() {
   const [hasProfile, setHasProfile] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
+  const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -61,6 +62,7 @@ export default function LuachPage() {
       }
     })();
     getEvents().then(setDbEvents);
+    getCategories().then(setDbCategories);
     const channel = supabase
       .channel("luach-events")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
@@ -70,12 +72,15 @@ export default function LuachPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // המרת אירועי DB לפורמט תצוגה אחיד עם צבעי קטגוריות מקומיים (לפי שם)
+  // המרת אירועי DB לפורמט תצוגה אחיד — צבע ישירות מ-DB, תמיכה במולטי-תחום
+  type CatDeptVal = "education" | "youth" | "both";
   type ViewEv = {
     id: string; name: string;
-    catName: string; catColor: string; catDept: "education" | "youth";
+    catName: string; catColor: string; catDept: CatDeptVal;
+    catNames: string[]; catDepts: CatDeptVal[];
     startMonth: number; endMonth: number;
     startDay: number | null; endDay: number | null;
+    startTime: string | null; endTime: string | null;
     location: string | null; responsible: string | null;
     ageGroups: string[]; status: string;
   };
@@ -87,15 +92,26 @@ export default function LuachPage() {
   const allViewEvents: ViewEv[] = useMemo(() => {
     if (dbEvents.length > 0) {
       return dbEvents.map(e => {
-        const dbDept = (e.categories?.department as "education" | "youth") || "education";
-        const local = localCatByName(e.categories?.name || "", dbDept);
+        const ids = (e.category_ids && e.category_ids.length > 0)
+          ? e.category_ids
+          : (e.category_id ? [e.category_id] : []);
+        const allCats = ids
+          .map(id => dbCategories.find(c => c.id === id))
+          .filter((c): c is DbCategory => !!c);
+        const primary = allCats[0] || (e.categories as DbCategory | undefined);
+        const dbDept = (primary?.department as CatDeptVal) || "education";
+        const dbColor = primary?.color;
+        const local   = !dbColor ? localCatByName(primary?.name || "", dbDept) : null;
         return {
           id: e.id, name: e.name,
-          catName: e.categories?.name || "ללא תחום",
-          catColor: local?.color || "#888",
+          catName: primary?.name || "ללא תחום",
+          catColor: dbColor || local?.color || "#888",
           catDept: dbDept,
+          catNames: allCats.length > 0 ? allCats.map(c => c.name) : [primary?.name || ""].filter(Boolean),
+          catDepts: allCats.length > 0 ? allCats.map(c => c.department as CatDeptVal) : [dbDept],
           startMonth: e.start_month, endMonth: e.end_month,
           startDay: e.start_day, endDay: e.end_day,
+          startTime: e.start_time, endTime: e.end_time,
           location: e.location, responsible: e.responsible,
           ageGroups: e.age_groups || [], status: e.status,
         };
@@ -104,17 +120,21 @@ export default function LuachPage() {
     // fallback: DEMO_EVENTS
     return DEMO_EVENTS.map(e => {
       const cat = CATEGORIES.find(c => c.id === e.categoryId);
+      const dept = (cat?.department || "education") as CatDeptVal;
       return {
         id: e.id, name: e.name,
         catName: cat?.name || "ללא", catColor: cat?.color || "#888",
-        catDept: cat?.department || "education",
+        catDept: dept,
+        catNames: cat ? [cat.name] : [],
+        catDepts: cat ? [dept] : [],
         startMonth: e.startMonth, endMonth: e.endMonth,
         startDay: e.startDay ?? null, endDay: e.endDay ?? null,
+        startTime: null, endTime: null,
         location: e.location ?? null, responsible: e.responsible ?? null,
         ageGroups: e.ageGroups, status: e.status,
       };
     });
-  }, [dbEvents]);
+  }, [dbEvents, dbCategories]);
 
   const educationCats = CATEGORIES.filter(c => c.department === "education");
   const youthCats     = CATEGORIES.filter(c => c.department === "youth");
@@ -128,7 +148,8 @@ export default function LuachPage() {
   const filteredEvents = useMemo(() => {
     return allViewEvents.filter(e => {
       if (e.status !== "published") return false;
-      if (deptFilter !== "all" && e.catDept !== deptFilter) return false;
+      // 'both' מציג גם בסינון חינוך וגם בנוער
+      if (deptFilter !== "all" && e.catDept !== deptFilter && e.catDept !== "both") return false;
       if (search && !e.name.includes(search)) return false;
       return true;
     });
@@ -138,14 +159,32 @@ export default function LuachPage() {
     ? allViewEvents.find(e => e.id === selectedEvent)
     : null;
 
-  // חישוב מיקום אירוע בגאנט (אחוזים)
-  function eventStyle(startMonth: number, endMonth: number, color: string) {
+  const DAYS_IN_MONTH: Record<number, number> = {
+    1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+    7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
+  };
+
+  // מיקום אירוע בגאנט ברמת היום
+  function eventStyle(
+    startMonth: number,
+    endMonth: number,
+    color: string,
+    startDay?: number | null,
+    endDay?: number | null,
+  ) {
     const startIdx = SCHOOL_YEAR_MONTHS.indexOf(startMonth);
-    const endIdx   = SCHOOL_YEAR_MONTHS.indexOf(endMonth);
+    let endIdx     = SCHOOL_YEAR_MONTHS.indexOf(endMonth);
     if (startIdx < 0 || endIdx < 0) return null;
-    const left  = (startIdx / 12) * 100;
-    const width = ((endIdx - startIdx + 1) / 12) * 100;
-    return { left: `${left}%`, width: `calc(${width}% - 4px)`, background: color };
+    if (endIdx < startIdx) endIdx = 11;
+    const monthW = 100 / 12;
+    const sDays  = DAYS_IN_MONTH[startMonth] || 30;
+    const eDays  = DAYS_IN_MONTH[endMonth] || 30;
+    const startOffset = startDay ? Math.max(0, (startDay - 1) / sDays) : 0;
+    const endOffset   = endDay   ? Math.min(1,  endDay      / eDays)   : 1;
+    const left  = (startIdx + startOffset) * monthW;
+    const right = (endIdx   + endOffset)   * monthW;
+    const width = Math.max(right - left, 1.4);
+    return { left: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
   }
 
   return (
@@ -333,11 +372,40 @@ export default function LuachPage() {
 
           {/* שורות קטגוריות */}
           {visibleCategories.map(cat => {
-            const catEvents = filteredEvents.filter(e => e.catName === cat.name && e.catDept === cat.department);
+            // אירוע מופיע גם אם הוא משויך ל-cat הזה ישירות, וגם אם משויך לתחום משותף ('both')
+            const catEvents = filteredEvents.filter(e =>
+              e.catNames.includes(cat.name) &&
+              (e.catDepts.includes(cat.department) || e.catDepts.includes("both"))
+            );
+            // הקצאת lanes כדי שאירועים חופפים יוצגו זה מעל זה
+            const sorted = [...catEvents].sort((a, b) => {
+              const am = SCHOOL_YEAR_MONTHS.indexOf(a.startMonth);
+              const bm = SCHOOL_YEAR_MONTHS.indexOf(b.startMonth);
+              if (am !== bm) return am - bm;
+              return (a.startDay || 1) - (b.startDay || 1);
+            });
+            const keyOf = (m: number, d: number | null, atEnd: boolean) => {
+              const idx = SCHOOL_YEAR_MONTHS.indexOf(m);
+              const dim = DAYS_IN_MONTH[m] || 30;
+              const dd = atEnd ? (d ?? dim) : (d ?? 1);
+              return idx * 31 + dd;
+            };
+            const lanes: number[] = [];
+            const laned: { ev: typeof catEvents[number]; lane: number }[] = [];
+            for (const ev of sorted) {
+              const sKey = keyOf(ev.startMonth, ev.startDay, false);
+              const eKey = keyOf(ev.endMonth, ev.endDay, true);
+              let lane = lanes.findIndex(end => end < sKey);
+              if (lane === -1) { lane = lanes.length; lanes.push(eKey); }
+              else lanes[lane] = eKey;
+              laned.push({ ev, lane });
+            }
+            const laneCount = Math.max(1, lanes.length);
+            const rowHeight = Math.max(42, 10 + laneCount * 26);
             return (
               <div key={cat.id} style={{
                 display: "grid", gridTemplateColumns: "110px repeat(12, 1fr)",
-                borderBottom: "0.5px solid var(--border)", minHeight: 42,
+                borderBottom: "0.5px solid var(--border)", minHeight: rowHeight,
                 transition: "background 0.1s",
               }}
                 onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-secondary)")}
@@ -358,17 +426,18 @@ export default function LuachPage() {
                   {SCHOOL_YEAR_MONTHS.map((_, i) => (
                     <div key={i} style={{ borderRight: i < 11 ? "0.5px solid var(--border)" : "none" }} />
                   ))}
-                  {catEvents.map(ev => {
-                    const style = eventStyle(ev.startMonth, ev.endMonth, cat.color);
+                  {laned.map(({ ev, lane }) => {
+                    const style = eventStyle(ev.startMonth, ev.endMonth, cat.color, ev.startDay, ev.endDay);
                     if (!style) return null;
+                    const top = 6 + lane * 26;
                     return (
                       <button
                         key={ev.id}
                         onClick={() => setSelectedEvent(selectedEvent === ev.id ? null : ev.id)}
-                        title={ev.name}
+                        title={`${ev.name}${ev.startDay ? ` · ${ev.startDay}/${ev.startMonth}` : ""}${ev.endDay && (ev.endDay !== ev.startDay || ev.endMonth !== ev.startMonth) ? `–${ev.endDay}/${ev.endMonth}` : ""}`}
                         style={{
-                          position: "absolute", top: 9, height: 24,
-                          borderRadius: 4, padding: "3px 7px",
+                          position: "absolute", top, height: 22,
+                          borderRadius: 4, padding: "2px 6px",
                           fontSize: 10, fontWeight: 500,
                           cursor: "pointer", whiteSpace: "nowrap",
                           overflow: "hidden", textOverflow: "ellipsis",
