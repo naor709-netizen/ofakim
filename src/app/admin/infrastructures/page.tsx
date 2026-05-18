@@ -10,6 +10,16 @@ import { TopBar } from "@/components/v3/TopBar";
 
 const INFRA_TYPES = ["אולם", "מועדון", "אולם ספורט", "בית ספר", "גן", "מרחב חוץ", "אחר"];
 
+const TYPE_STYLE: Record<string, { emoji: string; accent: string; bg: string }> = {
+  "אולם":        { emoji: "🎭", accent: "#7F77DD", bg: "linear-gradient(135deg, #EEEDFE 0%, #C7C4F5 100%)" },
+  "מועדון":      { emoji: "🎪", accent: "#D85A30", bg: "linear-gradient(135deg, #FAECE7 0%, #F5C4B3 100%)" },
+  "אולם ספורט":  { emoji: "🏀", accent: "#0F6E56", bg: "linear-gradient(135deg, #E1F5EE 0%, #9FE1CB 100%)" },
+  "בית ספר":     { emoji: "🏫", accent: "#185FA5", bg: "linear-gradient(135deg, #E6F1FB 0%, #B5D4F4 100%)" },
+  "גן":           { emoji: "🌳", accent: "#1D9E75", bg: "linear-gradient(135deg, #E1F5EE 0%, #9FE1CB 100%)" },
+  "מרחב חוץ":    { emoji: "🌅", accent: "#7C4A0A", bg: "linear-gradient(135deg, #FFF8EE 0%, #F5C57E 100%)" },
+  "אחר":          { emoji: "📍", accent: "#5F5E5A", bg: "linear-gradient(135deg, #F4F4F1 0%, #E5E5E0 100%)" },
+};
+
 export default function InfrastructuresPage() {
   const [items, setItems] = useState<Infrastructure[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,21 +94,35 @@ export default function InfrastructuresPage() {
 
       <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 500, margin: "0 0 4px" }}>🏛 מאגר תשתיות עירוני</h1>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>
-              {items.length} מקומות פעילים בעיר אופקים
-            </p>
+        {/* Hero */}
+        <div style={{
+          background: "linear-gradient(135deg, #1D9E75 0%, #185FA5 60%, #7F77DD 100%)",
+          borderRadius: 22, padding: "1.5rem 2rem",
+          marginBottom: 20, position: "relative", overflow: "hidden",
+          color: "#fff",
+        }}>
+          <div style={{ position: "absolute", bottom: -50, left: -50, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.12)", filter: "blur(40px)" }} />
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, opacity: 0.85, textTransform: "uppercase" }}>
+                🏛 VENUES · INFRASTRUCTURE
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 700, margin: "6px 0 4px", letterSpacing: -0.3 }}>
+                מאגר תשתיות עירוני
+              </h1>
+              <p style={{ fontSize: 13, margin: 0, opacity: 0.92 }}>
+                {items.length} מקומות פעילים · עיריית אופקים
+              </p>
+            </div>
+            <button onClick={openCreate} style={{
+              padding: "10px 20px", fontSize: 13, fontWeight: 600,
+              background: "rgba(255,255,255,0.95)", color: "#0F6E56",
+              border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}>
+              + תשתית חדשה
+            </button>
           </div>
-          <button onClick={openCreate} style={{
-            padding: "9px 18px", fontSize: 13, fontWeight: 500,
-            background: "#1A1A1A", color: "#fff",
-            border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
-          }}>
-            + תשתית חדשה
-          </button>
         </div>
 
         {/* Search */}
@@ -122,33 +146,60 @@ export default function InfrastructuresPage() {
             <p style={{ color: "var(--text-secondary)" }}>אין תשתיות עדיין. לחץ "תשתית חדשה" כדי להוסיף.</p>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-            {filtered.map(infra => (
-              <div key={infra.id} style={{
-                background: "#fff", borderRadius: "var(--radius-lg)",
-                padding: "1rem 1.25rem", border: "0.5px solid var(--border)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                  <div>
-                    <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 2px" }}>{infra.name}</h3>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, background: "var(--bg-secondary)", color: "var(--text-secondary)" }}>
-                      {infra.type}
-                    </span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+            {filtered.map(infra => {
+              const style = TYPE_STYLE[infra.type] || TYPE_STYLE["אחר"];
+              return (
+                <div key={infra.id} style={{
+                  background: "#fff", borderRadius: 16,
+                  padding: 0, border: "1px solid rgba(0,0,0,0.04)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  overflow: "hidden",
+                  transition: "transform 0.15s, box-shadow 0.15s",
+                  display: "flex", flexDirection: "column",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.08)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)"; }}
+                >
+                  {/* Banner צבעוני */}
+                  <div style={{
+                    background: style.bg, padding: "12px 16px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 26 }}>{style.emoji}</span>
+                      <span style={{
+                        fontSize: 11, padding: "3px 10px", borderRadius: 10,
+                        background: "rgba(255,255,255,0.7)", color: style.accent,
+                        fontWeight: 600, backdropFilter: "blur(4px)",
+                      }}>
+                        {infra.type}
+                      </span>
+                    </div>
+                    {!infra.active && (
+                      <span style={{ fontSize: 10, color: "var(--danger)", fontWeight: 600, background: "rgba(255,255,255,0.85)", padding: "2px 8px", borderRadius: 8 }}>
+                        לא פעיל
+                      </span>
+                    )}
                   </div>
-                  {!infra.active && <span style={{ fontSize: 10, color: "var(--danger)" }}>לא פעיל</span>}
+
+                  {/* תוכן */}
+                  <div style={{ padding: "12px 16px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px", color: style.accent }}>{infra.name}</h3>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
+                      {infra.address       && <div>📍 {infra.address}</div>}
+                      {infra.capacity      && <div>👥 קיבולת: {infra.capacity}</div>}
+                      {infra.contact_name  && <div>📞 {infra.contact_name}{infra.contact_phone ? ` · ${infra.contact_phone}` : ""}</div>}
+                      {infra.description   && <div style={{ marginTop: 4, fontStyle: "italic", color: "var(--text-tertiary)" }}>{infra.description}</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+                      <button onClick={() => openEdit(infra)} style={{ ...smallBtn(style.accent, "#fff"), flex: 1 }}>✏️ ערוך</button>
+                      <button onClick={() => handleDelete(infra.id)} style={smallBtn("#fff", "var(--danger)")}>🗑</button>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: 4 }}>
-                  {infra.address       && <div>📍 {infra.address}</div>}
-                  {infra.capacity      && <div>👥 קיבולת: {infra.capacity}</div>}
-                  {infra.contact_name  && <div>👤 {infra.contact_name}{infra.contact_phone ? ` · ${infra.contact_phone}` : ""}</div>}
-                  {infra.description   && <div style={{ marginTop: 4 }}>{infra.description}</div>}
-                </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-                  <button onClick={() => openEdit(infra)} style={smallBtn("#1A1A1A", "#fff")}>✏️ ערוך</button>
-                  <button onClick={() => handleDelete(infra.id)} style={smallBtn("#fff", "var(--danger)")}>🗑 מחק</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

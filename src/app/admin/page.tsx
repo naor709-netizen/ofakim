@@ -172,132 +172,217 @@ export default function AdminDashboard() {
         }
       />
 
-      <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* כרטיסי סיכום */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
+        {/* Hero צבעוני - צבעי אופקים */}
+        <div style={{
+          background: "linear-gradient(135deg, #185FA5 0%, #7F77DD 35%, #D85A30 75%, #E8B454 100%)",
+          borderRadius: 22, padding: "1.75rem 2rem",
+          marginBottom: 24, position: "relative", overflow: "hidden",
+          color: "#fff",
+        }}>
+          <div style={{ position: "absolute", top: -60, left: -60, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.15)", filter: "blur(40px)" }} />
+          <div style={{ position: "absolute", bottom: -80, right: -40, width: 240, height: 240, borderRadius: "50%", background: "rgba(255,255,255,0.1)", filter: "blur(50px)" }} />
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, opacity: 0.85, textTransform: "uppercase" }}>
+                🛡 ADMIN · OFAKIM
+              </div>
+              <h1 style={{ fontSize: 34, fontWeight: 700, margin: "6px 0 6px", letterSpacing: -0.5 }}>
+                שלום{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
+              </h1>
+              <p style={{ fontSize: 14, opacity: 0.92, margin: 0 }}>
+                {new Date().toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · עיריית אופקים
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {[
+                { num: totalEvents, label: "אירועים" },
+                { num: educationCount + youthCount > 0 ? Math.round((educationCount / Math.max(1, totalEvents)) * 100) : 0, label: "% חינוך", suffix: "%" },
+                { num: Math.max(...byMonth.map(m => m.count), 0), label: "שיא חודשי" },
+              ].map(s => (
+                <div key={s.label} style={{
+                  background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)",
+                  borderRadius: 14, padding: "10px 18px", textAlign: "center",
+                  border: "1px solid rgba(255,255,255,0.25)", minWidth: 80,
+                }}>
+                  <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{s.num}{s.suffix || ""}</div>
+                  <div style={{ fontSize: 10, marginTop: 4, opacity: 0.9, letterSpacing: 0.3 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* כרטיסי סיכום צבעוניים עם אייקונים */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24 }}>
           {[
-            { label: "סה״כ אירועים תשפ״ו", value: totalEvents,     color: "#1A1A1A", bg: "#fff" },
-            { label: "מנהל החינוך",         value: educationCount,  color: "#185FA5", bg: "#E6F1FB" },
-            { label: "מחלקת הנוער",          value: youthCount,      color: "#D85A30", bg: "#FAECE7" },
-            { label: "חודש עמוס ביותר",     value: "מרץ",           color: "#7F77DD", bg: "#EEEDFE" },
+            { label: "סה״כ אירועים תשפ״ו", value: totalEvents,     emoji: "📅", grad: "linear-gradient(135deg, #fefefe 0%, #f7f7f3 100%)", accent: "#1A1A1A" },
+            { label: "מנהל החינוך",         value: educationCount,  emoji: "🎓", grad: "linear-gradient(135deg, #E6F1FB 0%, #B5D4F4 100%)", accent: "#0C447C" },
+            { label: "מחלקת הנוער",          value: youthCount,      emoji: "🔥", grad: "linear-gradient(135deg, #FAECE7 0%, #F5C4B3 100%)", accent: "#993C1D" },
+            { label: "חודש עמוס ביותר",     value: byMonth.reduce((a,b) => b.count > a.count ? b : a, byMonth[0])?.label || "—", emoji: "⚡", grad: "linear-gradient(135deg, #FFF8EE 0%, #F5C57E 100%)", accent: "#7C4A0A" },
           ].map(card => (
-            <div key={card.label} style={{ background: card.bg, borderRadius: "var(--radius-lg)", padding: "1.25rem 1.5rem", border: "0.5px solid var(--border)" }}>
-              <div style={{ fontSize: 28, fontWeight: 600, color: card.color, marginBottom: 4 }}>{card.value}</div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{card.label}</div>
+            <div key={card.label} style={{
+              background: card.grad, borderRadius: 18,
+              padding: "1.25rem 1.5rem", border: "1px solid rgba(0,0,0,0.04)",
+              position: "relative", overflow: "hidden",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            }}>
+              <div style={{ position: "absolute", top: 12, left: 12, fontSize: 24, opacity: 0.65 }}>{card.emoji}</div>
+              <div style={{ fontSize: 32, fontWeight: 700, color: card.accent, marginBottom: 4, lineHeight: 1.1 }}>{card.value}</div>
+              <div style={{ fontSize: 12, color: card.accent, opacity: 0.75, fontWeight: 500 }}>{card.label}</div>
             </div>
           ))}
         </div>
 
-        {/* טאבים */}
-        <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: "1px solid var(--border)" }}>
-          {([["overview", "סקירה"], ["log", "היסטוריית שינויים"]] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setActiveTab(id)} style={{
-              background: "none", border: "none", padding: "10px 20px", fontSize: 13,
-              cursor: "pointer", fontFamily: "inherit",
-              color: activeTab === id ? "var(--text-primary)" : "var(--text-secondary)",
-              fontWeight: activeTab === id ? 600 : 400,
-              borderBottom: activeTab === id ? "2px solid #1A1A1A" : "2px solid transparent",
-              marginBottom: -1,
-            }}>{label}</button>
-          ))}
+        {/* טאבים — pill style */}
+        <div style={{ display: "inline-flex", gap: 4, marginBottom: 20, padding: 4, background: "#F4F4F1", borderRadius: 12 }}>
+          {([
+            { id: "overview", label: "סקירה",            emoji: "📊" },
+            { id: "log",      label: "היסטוריית שינויים", emoji: "📋" },
+          ] as const).map(t => {
+            const active = activeTab === t.id;
+            return (
+              <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
+                background: active ? "#fff" : "transparent",
+                border: "none", padding: "8px 16px", fontSize: 13,
+                cursor: "pointer", fontFamily: "inherit",
+                color: active ? "#1A1A1A" : "var(--text-secondary)",
+                fontWeight: active ? 600 : 500,
+                borderRadius: 9,
+                boxShadow: active ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.15s",
+              }}>
+                <span>{t.emoji}</span>
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
         {activeTab === "overview" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
 
-            {/* עמודות לפי חודש */}
-            <div style={{ background: "#fff", borderRadius: "var(--radius-lg)", padding: "1.25rem 1.5rem", border: "0.5px solid var(--border)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px", color: "var(--text-primary)" }}>
-                אירועים פעילים לפי חודש
+            {/* עמודות לפי חודש — צבעוני */}
+            <div style={{ background: "#fff", borderRadius: 18, padding: "1.25rem 1.5rem", border: "1px solid rgba(0,0,0,0.04)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>📊</span> אירועים פעילים לפי חודש
               </h3>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
-                {byMonth.map(m => (
-                  <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                    <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 500 }}>{m.count || ""}</div>
-                    <div style={{
-                      width: "100%", borderRadius: "3px 3px 0 0",
-                      background: m.count > 5 ? "#185FA5" : m.count > 2 ? "#B5D4F4" : "#E6F1FB",
-                      height: `${Math.max((m.count / maxMonth) * 90, m.count ? 8 : 2)}px`,
-                      transition: "height 0.3s",
-                    }} />
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>{m.label}</div>
-                  </div>
-                ))}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 130 }}>
+                {byMonth.map(m => {
+                  const intensity = m.count / maxMonth;
+                  const grad = intensity > 0.66 ? "linear-gradient(180deg, #D85A30 0%, #E8B454 100%)"
+                             : intensity > 0.33 ? "linear-gradient(180deg, #185FA5 0%, #7F77DD 100%)"
+                             : "linear-gradient(180deg, #B5D4F4 0%, #E6F1FB 100%)";
+                  return (
+                    <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>{m.count || ""}</div>
+                      <div style={{
+                        width: "100%", borderRadius: "6px 6px 2px 2px",
+                        background: grad,
+                        height: `${Math.max((m.count / maxMonth) * 95, m.count ? 8 : 2)}px`,
+                        transition: "height 0.3s",
+                        boxShadow: m.count > 0 ? "0 -2px 4px rgba(0,0,0,0.05)" : "none",
+                      }} />
+                      <div style={{ fontSize: 9, color: "var(--text-tertiary)", whiteSpace: "nowrap", fontWeight: 500 }}>{m.label}</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* תחומים */}
-            <div style={{ background: "#fff", borderRadius: "var(--radius-lg)", padding: "1.25rem 1.5rem", border: "0.5px solid var(--border)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px", color: "var(--text-primary)" }}>
-                פילוח לפי תחום
+            {/* תחומים — bars צבעוניים */}
+            <div style={{ background: "#fff", borderRadius: 18, padding: "1.25rem 1.5rem", border: "1px solid rgba(0,0,0,0.04)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>🎨</span> פילוח לפי תחום
               </h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {byCategory.slice(0, 7).map(cat => (
                   <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 11, color: "var(--text-secondary)", minWidth: 110, textAlign: "right" }}>{cat.name}</span>
-                    <div style={{ flex: 1, height: 8, background: "#F0F0EE", borderRadius: 4, overflow: "hidden" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-secondary)", minWidth: 110, textAlign: "right", fontWeight: 500 }}>{cat.name}</span>
+                    <div style={{ flex: 1, height: 10, background: "#F4F4F1", borderRadius: 6, overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)" }}>
                       <div style={{
-                        height: "100%", borderRadius: 4,
-                        background: cat.color,
+                        height: "100%", borderRadius: 6,
+                        background: `linear-gradient(90deg, ${cat.color}DD 0%, ${cat.color} 100%)`,
                         width: `${(cat.count / maxCat) * 100}%`,
                         transition: "width 0.4s",
+                        boxShadow: `0 0 8px ${cat.color}33`,
                       }} />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: cat.color, minWidth: 20 }}>{cat.count}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cat.color, minWidth: 20 }}>{cat.count}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* פילוח מחלקות — עוגה פשוטה */}
-            <div style={{ background: "#fff", borderRadius: "var(--radius-lg)", padding: "1.25rem 1.5rem", border: "0.5px solid var(--border)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px" }}>חלוקה בין מחלקות</h3>
+            {/* פילוח מחלקות — עוגה צבעונית */}
+            <div style={{ background: "#fff", borderRadius: 18, padding: "1.25rem 1.5rem", border: "1px solid rgba(0,0,0,0.04)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>🥧</span> חלוקה בין מחלקות
+              </h3>
               <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-                <svg width="100" height="100" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#E6F1FB" strokeWidth="20" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#185FA5" strokeWidth="20"
-                    strokeDasharray={`${(educationCount / totalEvents) * 251} 251`}
-                    strokeDashoffset="63" transform="rotate(-90 50 50)" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#D85A30" strokeWidth="20"
-                    strokeDasharray={`${(youthCount / totalEvents) * 251} 251`}
-                    strokeDashoffset={`${63 - (educationCount / totalEvents) * 251}`}
-                    transform="rotate(-90 50 50)" />
+                <svg width="110" height="110" viewBox="0 0 100 100">
+                  <defs>
+                    <linearGradient id="eduGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#185FA5" />
+                      <stop offset="100%" stopColor="#7F77DD" />
+                    </linearGradient>
+                    <linearGradient id="youthGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#D85A30" />
+                      <stop offset="100%" stopColor="#E8B454" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="#F4F4F1" strokeWidth="18" />
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="url(#eduGrad)" strokeWidth="18"
+                    strokeDasharray={`${(educationCount / Math.max(1, totalEvents)) * 251} 251`}
+                    strokeDashoffset="63" transform="rotate(-90 50 50)" strokeLinecap="round" />
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="url(#youthGrad)" strokeWidth="18"
+                    strokeDasharray={`${(youthCount / Math.max(1, totalEvents)) * 251} 251`}
+                    strokeDashoffset={`${63 - (educationCount / Math.max(1, totalEvents)) * 251}`}
+                    transform="rotate(-90 50 50)" strokeLinecap="round" />
                 </svg>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {[
-                    { label: "מנהל החינוך", count: educationCount, color: "#185FA5" },
-                    { label: "מחלקת הנוער", count: youthCount,     color: "#D85A30" },
+                    { label: "מנהל החינוך", count: educationCount, color: "#185FA5", emoji: "🎓" },
+                    { label: "מחלקת הנוער", count: youthCount,     color: "#D85A30", emoji: "🔥" },
                   ].map(d => (
                     <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 18 }}>{d.emoji}</span>
                       <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{d.label}</span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: d.color }}>{d.count}</span>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: d.color }}>{d.count}</span>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* קישורים מהירים */}
-            <div style={{ background: "#fff", borderRadius: "var(--radius-lg)", padding: "1.25rem 1.5rem", border: "0.5px solid var(--border)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 16px" }}>ניווט מהיר</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* ניווט מהיר — כרטיסיות צבעוניות */}
+            <div style={{ background: "#fff", borderRadius: 18, padding: "1.25rem 1.5rem", border: "1px solid rgba(0,0,0,0.04)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 14px", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 16 }}>🧭</span> ניווט מהיר
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
                 {[
-                  { href: "/education",            label: "גאנט מנהל החינוך",      color: "#185FA5", bg: "#E6F1FB" },
-                  { href: "/youth",                label: "גאנט מחלקת הנוער",      color: "#D85A30", bg: "#FAECE7" },
-                  { href: "/luach",                label: "לוח ציבורי לתושבים",    color: "#1D9E75", bg: "#E1F5EE" },
-                  { href: "/admin/users",          label: "👥 ניהול עובדים",          color: "#1A1A1A", bg: "#F5F5F3" },
-                  { href: "/admin/infrastructures", label: "🏛 מאגר תשתיות",         color: "#1A1A1A", bg: "#F5F5F3" },
+                  { href: "/education",             emoji: "🎓", label: "גאנט חינוך",     accent: "#185FA5", bg: "linear-gradient(135deg, #E6F1FB 0%, #B5D4F4 100%)" },
+                  { href: "/youth",                 emoji: "🔥", label: "גאנט נוער",      accent: "#993C1D", bg: "linear-gradient(135deg, #FAECE7 0%, #F5C4B3 100%)" },
+                  { href: "/luach",                 emoji: "🌳", label: "לוח לתושבים",    accent: "#0F6E56", bg: "linear-gradient(135deg, #E1F5EE 0%, #9FE1CB 100%)" },
+                  { href: "/admin/users",           emoji: "👥", label: "ניהול עובדים",   accent: "#7C4A0A", bg: "linear-gradient(135deg, #FFF8EE 0%, #F5C57E 100%)" },
+                  { href: "/admin/infrastructures", emoji: "🏛", label: "מאגר תשתיות",    accent: "#4338CA", bg: "linear-gradient(135deg, #EEEDFE 0%, #C7C4F5 100%)" },
+                  { href: "/admin/categories",      emoji: "🏷", label: "תחומים",          accent: "#BE185D", bg: "linear-gradient(135deg, #FCE7F3 0%, #F9A8D4 100%)" },
                 ].map(link => (
                   <Link key={link.href} href={link.href} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "10px 14px", borderRadius: "var(--radius-md)",
+                    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4,
+                    padding: "12px 14px", borderRadius: 14,
                     background: link.bg, textDecoration: "none",
-                    fontSize: 13, fontWeight: 500, color: link.color,
-                    transition: "opacity 0.15s",
-                  }}>
-                    {link.label} ←
+                    color: link.accent, transition: "transform 0.15s, box-shadow 0.15s",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)"; }}
+                  >
+                    <span style={{ fontSize: 22 }}>{link.emoji}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{link.label} ←</span>
                   </Link>
                 ))}
               </div>
@@ -352,17 +437,19 @@ export default function AdminDashboard() {
         )}
 
         {/* ייצוא */}
-        <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 24, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button onClick={() => { printEvents(dbEvents); toast("נפתח חלון הדפסה — אפשר לשמור כ-PDF", "info"); }} style={{
-            padding: "10px 18px", fontSize: 13, fontWeight: 500,
-            borderRadius: "var(--radius-md)",
-            border: "0.5px solid var(--border)", background: "#fff", cursor: "pointer",
+            padding: "10px 18px", fontSize: 13, fontWeight: 600,
+            borderRadius: 12, color: "#0C447C",
+            border: "1px solid #B5D4F4", background: "linear-gradient(135deg, #fff 0%, #E6F1FB 100%)",
+            cursor: "pointer", fontFamily: "inherit",
             display: "flex", alignItems: "center", gap: 6,
           }}>📄 הדפסה / PDF</button>
           <button onClick={() => { exportToCSV(dbEvents); toast("הקובץ ירד למחשב!", "success"); }} style={{
-            padding: "10px 18px", fontSize: 13, fontWeight: 500,
-            borderRadius: "var(--radius-md)",
-            border: "0.5px solid var(--border)", background: "#fff", cursor: "pointer",
+            padding: "10px 18px", fontSize: 13, fontWeight: 600,
+            borderRadius: 12, color: "#0F6E56",
+            border: "1px solid #9FE1CB", background: "linear-gradient(135deg, #fff 0%, #E1F5EE 100%)",
+            cursor: "pointer", fontFamily: "inherit",
             display: "flex", alignItems: "center", gap: 6,
           }}>📊 ייצוא לאקסל (CSV)</button>
         </div>
