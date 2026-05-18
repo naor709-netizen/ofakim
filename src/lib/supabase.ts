@@ -10,10 +10,13 @@ export type DbEvent = {
   name: string;
   description: string | null;
   category_id: string;
+  category_ids: string[];
   start_month: number;
   end_month: number;
   start_day: number | null;
   end_day: number | null;
+  start_time: string | null;
+  end_time: string | null;
   location: string | null;
   age_groups: string[];
   responsible: string | null;
@@ -28,7 +31,7 @@ export type DbEvent = {
 export type DbCategory = {
   id: string;
   name: string;
-  department: "education" | "youth";
+  department: "education" | "youth" | "both";
   color: string;
   display_order: number;
 };
