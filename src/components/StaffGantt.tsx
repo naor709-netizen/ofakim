@@ -79,7 +79,7 @@ function eventStyle(
   // מינימום רוחב כדי שאירוע יום-אחד יהיה לחיץ
   const width = Math.max(right - left, 1.4);
 
-  return { left: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
+  return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
 }
 
 type ViewEvent = {
