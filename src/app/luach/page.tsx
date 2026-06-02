@@ -164,6 +164,7 @@ export default function LuachPage() {
     1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
     7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
   };
+  const MIN_EVENT_WIDTH = 5; // רוחב מינימלי לאירוע (% של רוחב הגאנט) — לקריאות טקסט
 
   // מיקום אירוע בגאנט ברמת היום
   function eventStyle(
@@ -184,7 +185,7 @@ export default function LuachPage() {
     const endOffset   = endDay   ? Math.min(1,  endDay      / eDays)   : 1;
     const left  = (startIdx + startOffset) * monthW;
     const right = (endIdx   + endOffset)   * monthW;
-    const width = Math.max(right - left, 1.4);
+    const width = Math.max(right - left, MIN_EVENT_WIDTH);
     return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
   }
 
@@ -385,18 +386,26 @@ export default function LuachPage() {
               if (am !== bm) return am - bm;
               return (a.startDay || 1) - (b.startDay || 1);
             });
-            const keyOf = (m: number, d: number | null, atEnd: boolean) => {
-              const idx = SCHOOL_YEAR_MONTHS.indexOf(m);
-              const dim = DAYS_IN_MONTH[m] || 30;
-              const dd = atEnd ? (d ?? dim) : (d ?? 1);
-              return idx * 31 + dd;
+            // גבולות ויזואליים (% של רוחב הגאנט) כולל מינימום-רוחב
+            const monthW = 100 / 12;
+            const boundsOf = (ev: typeof catEvents[number]) => {
+              const sIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.startMonth);
+              let   eIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.endMonth);
+              if (sIdx < 0 || eIdx < 0) return { start: 0, end: MIN_EVENT_WIDTH };
+              if (eIdx < sIdx) eIdx = 11;
+              const sDays = DAYS_IN_MONTH[ev.startMonth] || 30;
+              const eDays = DAYS_IN_MONTH[ev.endMonth]   || 30;
+              const sOff = ev.startDay ? Math.max(0, (ev.startDay - 1) / sDays) : 0;
+              const eOff = ev.endDay   ? Math.min(1,  ev.endDay      / eDays)   : 1;
+              const start   = (sIdx + sOff) * monthW;
+              const realEnd = (eIdx + eOff) * monthW;
+              return { start, end: start + Math.max(realEnd - start, MIN_EVENT_WIDTH) };
             };
             const lanes: number[] = [];
             const laned: { ev: typeof catEvents[number]; lane: number }[] = [];
             for (const ev of sorted) {
-              const sKey = keyOf(ev.startMonth, ev.startDay, false);
-              const eKey = keyOf(ev.endMonth, ev.endDay, true);
-              let lane = lanes.findIndex(end => end < sKey);
+              const { start: sKey, end: eKey } = boundsOf(ev);
+              let lane = lanes.findIndex(end => end <= sKey);
               if (lane === -1) { lane = lanes.length; lanes.push(eKey); }
               else lanes[lane] = eKey;
               laned.push({ ev, lane });

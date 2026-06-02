@@ -53,6 +53,9 @@ const DAYS_IN_MONTH: Record<number, number> = {
   7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
 };
 
+// רוחב מינימלי לאירוע בגאנט (% של רוחב כולל) — מבטיח שטקסט יהיה קריא
+const MIN_EVENT_WIDTH = 5;
+
 // מחשב מיקום אירוע בגאנט ברמת היום (לא רק החודש)
 function eventStyle(
   startMonth: number,
@@ -76,8 +79,8 @@ function eventStyle(
 
   const left  = (startIdx + startOffset) * monthW;
   const right = (endIdx   + endOffset)   * monthW;
-  // מינימום רוחב כדי שאירוע יום-אחד יהיה לחיץ
-  const width = Math.max(right - left, 1.4);
+  // מינימום רוחב כדי שטקסט יהיה קריא (אירוע יום-אחד מורחב ויזואלית)
+  const width = Math.max(right - left, MIN_EVENT_WIDTH);
 
   return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
 }
@@ -213,15 +216,24 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     });
   }, [allViewEvents, allCats, visibleCats, search, schoolYear]);
 
-  // הקצאת נתיבים (lanes) לאירועים חופפים בכל קטגוריה
+  // הקצאת נתיבים (lanes) — מבוסס גבולות ויזואליים (% של רוחב גאנט)
+  // כדי שאירועי יום-אחד שמורחבים למינימום-רוחב לא יחפפו ויזואלית באותה שורה
   const lanesByCat = useMemo(() => {
     const laned = new Map<string, { ev: ViewEvent; lane: number }[]>();
     const counts = new Map<string, number>();
-    const keyOf = (m: number, d: number | null | undefined, atEnd: boolean) => {
-      const idx = SCHOOL_YEAR_MONTHS.indexOf(m);
-      const dim = DAYS_IN_MONTH[m] || 30;
-      const dd  = atEnd ? (d ?? dim) : (d ?? 1);
-      return idx * 31 + dd;
+    const monthW = 100 / 12;
+    const boundsOf = (ev: ViewEvent) => {
+      const sIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.startMonth);
+      let   eIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.endMonth);
+      if (sIdx < 0 || eIdx < 0) return { start: 0, end: MIN_EVENT_WIDTH };
+      if (eIdx < sIdx) eIdx = 11;
+      const sDays = DAYS_IN_MONTH[ev.startMonth] || 30;
+      const eDays = DAYS_IN_MONTH[ev.endMonth]   || 30;
+      const sOff = ev.startDay ? Math.max(0, (ev.startDay - 1) / sDays) : 0;
+      const eOff = ev.endDay   ? Math.min(1,  ev.endDay      / eDays)   : 1;
+      const start   = (sIdx + sOff) * monthW;
+      const realEnd = (eIdx + eOff) * monthW;
+      return { start, end: start + Math.max(realEnd - start, MIN_EVENT_WIDTH) };
     };
     for (const cat of visibleCats) {
       const catEvents = filteredEvents.filter(e => eventMatchesCat(e, cat.id));
@@ -234,9 +246,8 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       const lanes: number[] = []; // endKey per lane
       const list: { ev: ViewEvent; lane: number }[] = [];
       for (const ev of sorted) {
-        const sKey = keyOf(ev.startMonth, ev.startDay, false);
-        const eKey = keyOf(ev.endMonth,   ev.endDay,   true);
-        let lane = lanes.findIndex(end => end < sKey);
+        const { start: sKey, end: eKey } = boundsOf(ev);
+        let lane = lanes.findIndex(end => end <= sKey);
         if (lane === -1) { lane = lanes.length; lanes.push(eKey); }
         else lanes[lane] = eKey;
         list.push({ ev, lane });
