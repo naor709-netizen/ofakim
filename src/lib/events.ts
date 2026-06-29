@@ -20,6 +20,8 @@ export type DbEvent = {
   end_day: number | null;
   start_year: number | null;
   end_year: number | null;
+  start_time: string | null;
+  end_time: string | null;
   location: string | null;
   age_groups: string[];
   responsible: string | null;
@@ -62,6 +64,8 @@ export async function createEvent(payload: {
   location?: string | null;
   responsible?: string | null;
   description?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
 }) {
   return supabase.from("events").insert({
     name:        payload.name,
@@ -76,6 +80,8 @@ export async function createEvent(payload: {
     location:    payload.location   ?? null,
     responsible: payload.responsible ?? null,
     description: payload.description ?? null,
+    start_time:  payload.start_time ?? null,
+    end_time:    payload.end_time   ?? null,
     status:      "published",
   }).select("*, categories(*)").single();
 }
@@ -93,6 +99,8 @@ export async function updateEvent(id: string, payload: {
   location?: string | null;
   responsible?: string | null;
   description?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
 }) {
   return supabase.from("events").update(payload).eq("id", id).select("*, categories(*)").single();
 }

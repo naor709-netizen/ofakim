@@ -61,6 +61,7 @@ type ViewEvent = {
   startYear?: number | null; endYear?: number | null;
   ageGroups: string[]; location?: string | null; responsible?: string | null; status: string;
   description?: string | null;
+  startTime?: string | null; endTime?: string | null;
 };
 
 const SCHOOL_YEARS = [
@@ -139,6 +140,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       location: e.location, responsible: e.responsible,
       status: e.status,
       description: e.description,
+      startTime: e.start_time, endTime: e.end_time,
     })),
   ], [dbEvents]);
 
@@ -199,6 +201,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     name: "", categoryId: "",
     startDate: today, endDate: today,
     ageGroups: "", location: "", responsible: "", description: "",
+    startTime: "", endTime: "",
   });
 
   function startEdit(ev: ViewEvent) {
@@ -216,6 +219,8 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       location:    ev.location ?? "",
       responsible: ev.responsible ?? "",
       description: ev.description ?? "",
+      startTime: ev.startTime ?? "",
+      endTime: ev.endTime ?? "",
     });
     setShowNewEvent(true);
     setSelectedEvent(null);
@@ -251,6 +256,8 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       location:    newEvent.location || null,
       responsible: newEvent.responsible || null,
       description: newEvent.description || null,
+      start_time:  newEvent.startTime || null,
+      end_time:    newEvent.endTime || null,
     };
     const result = editingId
       ? await updateEvent(editingId, payload)
@@ -272,7 +279,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     setShowNewEvent(false);
     setConflictWarning(null);
     setEditingId(null);
-    setNewEvent({ name: "", categoryId: myCategories[0]?.id ?? "", startDate: today, endDate: today, ageGroups: "", location: "", responsible: "", description: "" });
+    setNewEvent({ name: "", categoryId: myCategories[0]?.id ?? "", startDate: today, endDate: today, ageGroups: "", location: "", responsible: "", description: "", startTime: "", endTime: "" });
   }
 
   async function handleDelete(id: string) {
@@ -708,6 +715,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               {selectedEventData.location   && <span>📍 {selectedEventData.location}</span>}
               {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
               {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
+              {selectedEventData.startTime  && <span>🕐 {selectedEventData.startTime}{selectedEventData.endTime ? ` – ${selectedEventData.endTime}` : ""}</span>}
             </div>
             {selectedEventData.description && (
               <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
@@ -936,6 +944,46 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: "-4px 0 0" }}>
                 טווח: ספטמבר 2024 – אוגוסט 2027 (תשפ״ה / תשפ״ו / תשפ״ז)
               </p>
+
+              {/* שדות שעה */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {(["startTime", "endTime"] as const).map((key, idx) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                      {idx === 0 ? "שעת התחלה (אופציונלי)" : "שעת סיום (אופציונלי)"}
+                    </label>
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <select
+                        value={newEvent[key].split(":")[1] ?? ""}
+                        onChange={e => {
+                          const h = newEvent[key].split(":")[0] || "";
+                          setNewEvent(prev => ({ ...prev, [key]: h ? `${h}:${e.target.value}` : "" }));
+                        }}
+                        style={{ flex: 1, padding: "8px 6px", fontSize: 13, border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "inherit", background: "#fff" }}
+                      >
+                        <option value="">דקות</option>
+                        {["00", "15", "30", "45"].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <span style={{ color: "var(--text-tertiary)" }}>:</span>
+                      <select
+                        value={newEvent[key].split(":")[0] ?? ""}
+                        onChange={e => {
+                          const m = newEvent[key].split(":")[1] || "00";
+                          setNewEvent(prev => ({ ...prev, [key]: e.target.value ? `${e.target.value}:${m}` : "" }));
+                        }}
+                        style={{ flex: 1, padding: "8px 6px", fontSize: 13, border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "inherit", background: "#fff" }}
+                      >
+                        <option value="">שעה</option>
+                        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      {newEvent[key] && (
+                        <button onClick={() => setNewEvent(prev => ({ ...prev, [key]: "" }))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-tertiary)", fontSize: 16 }}>×</button>
+                      )}
+                      <span style={{ fontSize: 10, color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>ללא שעה</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {!conflictWarning && (
                 <button
