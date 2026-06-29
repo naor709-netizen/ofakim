@@ -61,6 +61,7 @@ export async function createEvent(payload: {
   age_groups?: string[];
   location?: string | null;
   responsible?: string | null;
+  description?: string | null;
 }) {
   return supabase.from("events").insert({
     name:        payload.name,
@@ -74,6 +75,7 @@ export async function createEvent(payload: {
     age_groups:  payload.age_groups ?? [],
     location:    payload.location   ?? null,
     responsible: payload.responsible ?? null,
+    description: payload.description ?? null,
     status:      "published",
   }).select("*, categories(*)").single();
 }
@@ -90,6 +92,7 @@ export async function updateEvent(id: string, payload: {
   age_groups?: string[];
   location?: string | null;
   responsible?: string | null;
+  description?: string | null;
 }) {
   return supabase.from("events").update(payload).eq("id", id).select("*, categories(*)").single();
 }

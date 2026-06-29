@@ -60,6 +60,7 @@ type ViewEvent = {
   startDay?: number | null; endDay?: number | null;
   startYear?: number | null; endYear?: number | null;
   ageGroups: string[]; location?: string | null; responsible?: string | null; status: string;
+  description?: string | null;
 };
 
 const SCHOOL_YEARS = [
@@ -137,6 +138,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       ageGroups: e.age_groups || [],
       location: e.location, responsible: e.responsible,
       status: e.status,
+      description: e.description,
     })),
   ], [dbEvents]);
 
@@ -196,7 +198,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   const [newEvent, setNewEvent] = useState({
     name: "", categoryId: "",
     startDate: today, endDate: today,
-    ageGroups: "", location: "", responsible: "",
+    ageGroups: "", location: "", responsible: "", description: "",
   });
 
   function startEdit(ev: ViewEvent) {
@@ -213,6 +215,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       ageGroups:   ev.ageGroups.join(", "),
       location:    ev.location ?? "",
       responsible: ev.responsible ?? "",
+      description: ev.description ?? "",
     });
     setShowNewEvent(true);
     setSelectedEvent(null);
@@ -247,6 +250,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       age_groups:  newEvent.ageGroups ? newEvent.ageGroups.split(",").map(s => s.trim()).filter(Boolean) : [],
       location:    newEvent.location || null,
       responsible: newEvent.responsible || null,
+      description: newEvent.description || null,
     };
     const result = editingId
       ? await updateEvent(editingId, payload)
@@ -268,7 +272,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     setShowNewEvent(false);
     setConflictWarning(null);
     setEditingId(null);
-    setNewEvent({ name: "", categoryId: myCategories[0]?.id ?? "", startDate: today, endDate: today, ageGroups: "", location: "", responsible: "" });
+    setNewEvent({ name: "", categoryId: myCategories[0]?.id ?? "", startDate: today, endDate: today, ageGroups: "", location: "", responsible: "", description: "" });
   }
 
   async function handleDelete(id: string) {
@@ -705,6 +709,11 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
               {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
             </div>
+            {selectedEventData.description && (
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {selectedEventData.description}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => selectedEventData && startEdit(selectedEventData)} style={{
                 padding: "10px 20px", fontSize: 13, fontWeight: 500,
@@ -803,6 +812,25 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                   />
                 </div>
               ))}
+
+              {/* הערות / תיאור */}
+              <div>
+                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                  הערות / תיאור
+                </label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="כמה מילים על האירוע, מטרות, פרטים נוספים..."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "8px 11px", fontSize: 13,
+                    border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                    fontFamily: "inherit", outline: "none", resize: "vertical",
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
 
               {/* שדה מיקום: בחירה מהמאגר + טקסט חופשי */}
               <div>
