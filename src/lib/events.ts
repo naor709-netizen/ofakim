@@ -29,6 +29,7 @@ export type DbEvent = {
   age_groups: string[];
   responsible: string | null;
   status: "draft" | "published" | "cancelled";
+  image_url: string | null;
   created_at: string;
   updated_at: string;
   categories?: DbCategory;
@@ -70,6 +71,7 @@ export async function createEvent(payload: {
   location?: string | null;
   responsible?: string | null;
   description?: string | null;
+  image_url?: string | null;
 }) {
   const cats = (payload.category_ids && payload.category_ids.length > 0)
     ? payload.category_ids
@@ -90,6 +92,7 @@ export async function createEvent(payload: {
     location:     payload.location   ?? null,
     responsible:  payload.responsible ?? null,
     description:  payload.description ?? null,
+    image_url:    payload.image_url ?? null,
     status:       "published",
   }).select("*, categories(*)").single();
 }
@@ -110,6 +113,7 @@ export async function updateEvent(id: string, payload: {
   location?: string | null;
   responsible?: string | null;
   description?: string | null;
+  image_url?: string | null;
 }) {
   const finalPayload: Record<string, unknown> = { ...payload };
   if (payload.category_ids && payload.category_ids.length > 0) {
@@ -124,6 +128,20 @@ export async function updateEvent(id: string, payload: {
 
 export async function deleteEvent(id: string) {
   return supabase.from("events").delete().eq("id", id);
+}
+
+const POSTER_BUCKET = "event-posters";
+
+export async function uploadEventPoster(file: File): Promise<{ url: string | null; error: string | null }> {
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from(POSTER_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) return { url: null, error: error.message };
+  const { data } = supabase.storage.from(POSTER_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
 }
 
 export async function createCategory(payload: {

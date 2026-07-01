@@ -10,7 +10,7 @@ import {
 import BotChat from "@/components/BotChat";
 import MonthlyView from "@/components/MonthlyView";
 import { supabase } from "@/lib/supabase";
-import { getCategories, getEvents, createEvent, updateEvent, deleteEvent, type DbEvent, type DbCategory } from "@/lib/events";
+import { getCategories, getEvents, createEvent, updateEvent, deleteEvent, uploadEventPoster, type DbEvent, type DbCategory } from "@/lib/events";
 import { logAudit, getInfrastructures, createInfrastructure, type Infrastructure } from "@/lib/infrastructure";
 
 const INFRA_TYPES = ["אולם", "מועדון", "אולם ספורט", "בית ספר", "גן", "מרחב חוץ", "אחר"];
@@ -93,6 +93,7 @@ type ViewEvent = {
   startTime?: string | null; endTime?: string | null;
   ageGroups: string[]; location?: string | null; responsible?: string | null; status: string;
   description?: string | null;
+  imageUrl?: string | null;
 };
 
 const SCHOOL_YEARS = [
@@ -173,6 +174,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       location: e.location, responsible: e.responsible,
       status: e.status,
       description: e.description,
+      imageUrl: e.image_url,
     })),
   ], [dbEvents]);
 
@@ -344,13 +346,27 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     startTime: string; endTime: string;
     ageGroups: string; location: string; responsible: string;
     description: string;
+    imageUrl: string;
   }>({
     name: "", categoryIds: [],
     startDate: today, endDate: today,
     startTime: "", endTime: "",
     ageGroups: "", location: "", responsible: "",
     description: "",
+    imageUrl: "",
   });
+  const [uploadingPoster, setUploadingPoster] = useState(false);
+
+  async function handlePosterFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPoster(true);
+    const { url, error } = await uploadEventPoster(file);
+    setUploadingPoster(false);
+    e.target.value = "";
+    if (error || !url) { toast("שגיאה בהעלאת הפוסטר: " + (error ?? ""), "error"); return; }
+    setNewEvent(prev => ({ ...prev, imageUrl: url }));
+  }
 
   // יצירת תשתית inline בתוך טופס האירוע
   const [showInfraInline, setShowInfraInline] = useState(false);
@@ -401,6 +417,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       location:    ev.location ?? "",
       responsible: ev.responsible ?? "",
       description: ev.description ?? "",
+      imageUrl:    ev.imageUrl ?? "",
     });
     setShowNewEvent(true);
     setSelectedEvent(null);
@@ -438,6 +455,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       location:     newEvent.location || null,
       responsible:  newEvent.responsible || null,
       description:  newEvent.description || null,
+      image_url:    newEvent.imageUrl || null,
     };
     const result = editingId
       ? await updateEvent(editingId, payload)
@@ -459,7 +477,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     setShowNewEvent(false);
     setConflictWarning(null);
     setEditingId(null);
-    setNewEvent({ name: "", categoryIds: myCategories[0]?.id ? [myCategories[0].id] : [], startDate: today, endDate: today, startTime: "", endTime: "", ageGroups: "", location: "", responsible: "", description: "" });
+    setNewEvent({ name: "", categoryIds: myCategories[0]?.id ? [myCategories[0].id] : [], startDate: today, endDate: today, startTime: "", endTime: "", ageGroups: "", location: "", responsible: "", description: "", imageUrl: "" });
   }
 
   async function handleDelete(id: string) {
@@ -942,6 +960,17 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                 {selectedEventData.description}
               </p>
             )}
+            {selectedEventData.imageUrl && (
+              <img
+                src={selectedEventData.imageUrl}
+                alt="פוסטר האירוע"
+                style={{
+                  maxWidth: "100%", maxHeight: 260,
+                  objectFit: "contain", borderRadius: "var(--radius-md)",
+                  marginBottom: 14, display: "block",
+                }}
+              />
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => selectedEventData && startEdit(selectedEventData)} style={{
                 padding: "10px 20px", fontSize: 13, fontWeight: 500,
@@ -1059,6 +1088,54 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                     lineHeight: 1.5,
                   }}
                 />
+              </div>
+
+              {/* פוסטר האירוע */}
+              <div>
+                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                  פוסטר האירוע (אופציונלי)
+                </label>
+                {newEvent.imageUrl ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <img src={newEvent.imageUrl} alt="פוסטר" style={{
+                      width: 64, height: 64, objectFit: "cover",
+                      borderRadius: "var(--radius-md)", border: "0.5px solid var(--border)",
+                    }} />
+                    <button
+                      type="button"
+                      onClick={() => setNewEvent(prev => ({ ...prev, imageUrl: "" }))}
+                      style={{
+                        fontSize: 12, color: "var(--danger)", background: "transparent",
+                        border: "none", cursor: "pointer", fontFamily: "inherit",
+                      }}
+                    >
+                      ✕ הסר פוסטר
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      id={`poster-upload-${department}`}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePosterFileChange}
+                      style={{ display: "none" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById(`poster-upload-${department}`)?.click()}
+                      disabled={uploadingPoster}
+                      style={{
+                        width: "100%", padding: "10px", fontSize: 12.5, fontWeight: 500,
+                        border: `1.5px dashed ${cfg.light}`, borderRadius: "var(--radius-md)",
+                        background: cfg.lighter, color: cfg.primaryDark,
+                        cursor: uploadingPoster ? "not-allowed" : "pointer", fontFamily: "inherit",
+                      }}
+                    >
+                      {uploadingPoster ? "מעלה..." : "🖼️ העלאת פוסטר"}
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* שדה מיקום: בחירה מהמאגר + טקסט חופשי + יצירת תשתית inline */}
