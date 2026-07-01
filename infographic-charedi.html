@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1280" />
+  <title>תלמידים חרדים בעיר אופקים – תשפ"ה 2025</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #dce8f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    /* ── Slide container ── */
+    .slide {
+      width: 1280px;
+      min-height: 720px;
+      background: #fff;
+      border: 1.5px solid #c0cfea;
+      border-radius: 10px;
+      padding: 36px 56px 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 6px 32px rgba(10,30,100,.12);
+      position: relative;
+    }
+
+    /* ── Watermark ── */
+    .watermark {
+      position: absolute;
+      bottom: 12px;
+      left: 20px;
+      font-size: 11px;
+      color: #aab8d0;
+      letter-spacing: .3px;
+    }
+
+    /* ═══════════ TOP SECTION ═══════════ */
+    .top-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* Right: main number */
+    .main-stat { text-align: right; }
+
+    .main-number {
+      font-size: 86px;
+      font-weight: 900;
+      color: #0c2076;
+      line-height: 1;
+      letter-spacing: -3px;
+    }
+
+    .main-label {
+      font-size: 21px;
+      font-weight: 700;
+      color: #0c2076;
+      margin-top: 4px;
+    }
+
+    .main-sub {
+      font-size: 13px;
+      color: #7a8fb0;
+      margin-top: 3px;
+    }
+
+    /* Center: people SVG */
+    .center-icon { flex-shrink: 0; }
+
+    /* Left: percentage */
+    .pct-stat { text-align: left; }
+
+    .pct-number {
+      font-size: 66px;
+      font-weight: 900;
+      color: #0c2076;
+      line-height: 1;
+    }
+
+    .pct-label {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0c2076;
+    }
+
+    .pct-sub {
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* ═══════════ DIVIDER ═══════════ */
+    .divider {
+      height: 1px;
+      background: #d8e4f2;
+    }
+
+    /* ═══════════ GROWTH SECTION ═══════════ */
+    .growth-section { text-align: center; line-height: 1.2; }
+
+    .growth-title {
+      font-size: 40px;
+      font-weight: 900;
+      color: #0c2076;
+    }
+
+    .growth-sub {
+      font-size: 17px;
+      color: #4a5d80;
+      margin-top: 2px;
+    }
+
+    /* ═══════════ TIMELINE ═══════════ */
+    .timeline-wrap {
+      display: flex;
+      align-items: center;
+      direction: ltr;
+      gap: 0;
+      height: 52px;
+    }
+
+    .tl-badge {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0c2076;
+      background: #d4e4f7;
+      border: 2px solid #5b8ec8;
+      border-radius: 22px;
+      padding: 6px 18px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .tl-bar {
+      flex: 1;
+      height: 24px;
+      background: linear-gradient(to left, #1c5bbf, #4b8fd6);
+    }
+
+    .tl-arrow {
+      width: 0; height: 0;
+      border-top: 26px solid transparent;
+      border-bottom: 26px solid transparent;
+      border-right: 34px solid #1c5bbf;
+      flex-shrink: 0;
+    }
+
+    .tl-badge-end {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      background: #0c2076;
+      border-radius: 22px;
+      padding: 6px 18px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ═══════════ BOTTOM STATS ═══════════ */
+    .bottom-row {
+      display: flex;
+      gap: 18px;
+      flex: 1;
+      min-height: 110px;
+    }
+
+    .stat-card {
+      flex: 1;
+      border: 2px solid #c0cfea;
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #fafcff;
+    }
+
+    .icon-area { flex-shrink: 0; }
+
+    .card-text { text-align: right; }
+
+    .card-main {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0c2076;
+      line-height: 1.3;
+    }
+
+    .card-detail {
+      font-size: 14px;
+      color: #374151;
+      margin-top: 3px;
+    }
+
+    .card-note {
+      font-size: 11.5px;
+      color: #8899bb;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- ════ TOP ════ -->
+  <div class="top-section">
+
+    <!-- RIGHT: main number -->
+    <div class="main-stat">
+      <div class="main-number">5,693</div>
+      <div class="main-label">תלמידים חרדים בעיר (תשפ"ה&nbsp;/&nbsp;2025)</div>
+      <div class="main-sub">גיל הרך + יסודי + על-יסודי &nbsp;|&nbsp; מקור: דו"ח תלם / משרד החינוך</div>
+    </div>
+
+    <!-- CENTER: people icon -->
+    <div class="center-icon">
+      <svg width="148" height="90" viewBox="0 0 148 90" fill="none"
+           xmlns="http://www.w3.org/2000/svg" stroke="#1c5bbf" stroke-width="2.6" stroke-linecap="round">
+        <!-- person 1 -->
+        <circle cx="22" cy="22" r="10" fill="none"/>
+        <path d="M6 58 C6 38 38 38 38 58" fill="none"/>
+        <!-- person 2 -->
+        <circle cx="56" cy="16" r="12" fill="none"/>
+        <path d="M37 58 C37 34 75 34 75 58" fill="none"/>
+        <!-- person 3 (center, slightly taller) -->
+        <circle cx="92" cy="14" r="13" fill="none"/>
+        <path d="M72 58 C72 32 112 32 112 58" fill="none"/>
+        <!-- person 4 -->
+        <circle cx="128" cy="20" r="10" fill="none"/>
+        <path d="M112 58 C112 40 144 40 144 58" fill="none"/>
+        <!-- ground line -->
+        <line x1="2" y1="58" x2="146" y2="58" stroke-width="2"/>
+      </svg>
+    </div>
+
+    <!-- LEFT: percentage -->
+    <div class="pct-stat">
+      <div class="pct-number">≈&nbsp;50%</div>
+      <div class="pct-label">מכלל תלמידי העיר</div>
+      <div class="pct-sub">(11,853 תלמידים בעיר כולה)</div>
+    </div>
+
+  </div><!-- /top -->
+
+  <div class="divider"></div>
+
+  <!-- ════ GROWTH ════ -->
+  <div class="growth-section">
+    <div class="growth-title">+61%&nbsp; גידול בעשור האחרון</div>
+    <div class="growth-sub">(תוספת של 2,169 תלמידים)</div>
+  </div>
+
+  <!-- ════ TIMELINE ════ -->
+  <div class="timeline-wrap">
+    <div class="tl-badge">2014:&nbsp; 3,524 תלמידים</div>
+    <div class="tl-bar"></div>
+    <div class="tl-arrow"></div>
+    <div class="tl-badge-end">2025:&nbsp; 5,693 תלמידים</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ════ BOTTOM 3 CARDS ════ -->
+  <div class="bottom-row">
+
+    <!-- CARD 1 – kindergartners (right, RTL) -->
+    <div class="stat-card">
+      <div class="icon-area">
+        <!-- baby crawling icon -->
+        <svg width="58" height="58" viewBox="0 0 58 58" fill="none"
+             xmlns="http://www.w3.org/2000/svg" stroke="#1c5bbf" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="44" cy="12" r="7" fill="none"/>
+          <path d="M38 20 C32 20 26 25 22 33 L12 44" fill="none"/>
+          <path d="M38 20 C44 20 50 24 52 32" fill="none"/>
+          <path d="M52 32 C55 34 56 37 54 40 L50 43" fill="none"/>
+          <path d="M12 44 L8 54" fill="none"/>
+          <path d="M12 44 L18 54" fill="none"/>
+          <path d="M50 43 L46 53" fill="none"/>
+          <path d="M50 43 L54 53" fill="none"/>
+        </svg>
+      </div>
+      <div class="card-text">
+        <div class="card-main">כ-1,500 גיל הרך (3–6)</div>
+        <div class="card-detail">61 גנים (50.5% מסך הגנים בעיר)</div>
+      </div>
+    </div>
+
+    <!-- CARD 2 – elementary (center) -->
+    <div class="stat-card">
+      <div class="icon-area">
+        <!-- reading person icon -->
+        <svg width="58" height="58" viewBox="0 0 58 58" fill="none"
+             xmlns="http://www.w3.org/2000/svg" stroke="#1c5bbf" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="29" cy="12" r="9" fill="none"/>
+          <!-- body -->
+          <path d="M20 24 L12 50" fill="none"/>
+          <path d="M38 24 L46 50" fill="none"/>
+          <!-- arms holding book -->
+          <path d="M20 30 C24 26 34 26 38 30" fill="none"/>
+          <!-- open book -->
+          <path d="M13 36 L29 33 L45 36 L45 50 L29 47 L13 50 Z" fill="none"/>
+          <line x1="29" y1="33" x2="29" y2="47"/>
+        </svg>
+      </div>
+      <div class="card-text">
+        <div class="card-main">4,096 יסודי &nbsp;|&nbsp; 13 מוסדות</div>
+        <div class="card-detail">פיצול מגדר: 2,063 בנים,&nbsp; 2,033 בנות</div>
+        <div class="card-detail">47.1% ממערכת היסודי בעיר</div>
+      </div>
+    </div>
+
+    <!-- CARD 3 – post-elementary (left) -->
+    <div class="stat-card">
+      <div class="icon-area">
+        <!-- graduation cap icon -->
+        <svg width="58" height="58" viewBox="0 0 58 58" fill="none"
+             xmlns="http://www.w3.org/2000/svg" stroke="#1c5bbf" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="29,9 52,22 29,35 6,22" fill="none"/>
+          <path d="M15 27 L15 42 C15 42 29 50 43 42 L43 27" fill="none"/>
+          <line x1="52" y1="22" x2="52" y2="38"/>
+          <circle cx="52" cy="40" r="3" fill="#1c5bbf" stroke="none"/>
+        </svg>
+      </div>
+      <div class="card-text">
+        <div class="card-main">כ-97 על-יסודי</div>
+        <div class="card-detail">5 ישיבות + 4 תיכוני בנות</div>
+        <div class="card-detail">(לא כולל ישיבות גדולות)</div>
+      </div>
+    </div>
+
+  </div><!-- /bottom -->
+
+  <div class="watermark">מקור: דו"ח מיפוי האוכלוסייה החרדית באופקים – תלם, 2025 | משרד החינוך, מאגר "מבט רחב" (פרק 3 ונספח 2)</div>
+
+</div><!-- /slide -->
+</body>
+</html>
