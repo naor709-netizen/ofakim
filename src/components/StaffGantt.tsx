@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -81,8 +81,10 @@ function eventStyle(
   const right = (endIdx   + endOffset)   * monthW;
   // מינימום רוחב כדי שטקסט יהיה קריא (אירוע יום-אחד מורחב ויזואלית)
   const width = Math.max(right - left, MIN_EVENT_WIDTH);
+  // אירוע בסוף השנה לא יגלוש מחוץ לגאנט (ייחתך ע"י overflow)
+  const clampedLeft = Math.max(0, Math.min(left, 100 - width));
 
-  return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
+  return { insetInlineStart: `${clampedLeft}%`, width: `calc(${width}% - 2px)`, background: color };
 }
 
 type ViewEvent = {
@@ -132,7 +134,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   const [search, setSearch] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [showNewEvent, setShowNewEvent] = useState(false);
-  const [filterDept, setFilterDept] = useState<"mine" | "all">("all");
+  const [filterDept, setFilterDept] = useState<"all" | "education" | "youth">("all");
   const [conflictWarning, setConflictWarning] = useState<string[] | null>(null);
 
   // נתונים מ-Supabase
@@ -187,12 +189,15 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
   const myCategories    = allCats.filter(c => c.department === department || c.department === "both");
   const otherCategories = allCats.filter(c => c.department !== department && c.department !== "both");
-  const visibleCats  = filterDept === "mine" ? myCategories : [...myCategories, ...otherCategories];
+  const visibleCats  = filterDept === "all"
+    ? [...myCategories, ...otherCategories]
+    : allCats.filter(c => c.department === filterDept || c.department === "both");
 
   // מחזיר את שנת הלימודים של אירוע (שנת ספטמבר שלו)
   function eventSchoolYear(e: ViewEvent): number {
-    const startY = e.startYear ?? (e.startMonth >= 9 ? 2025 : 2026);
-    return e.startMonth >= 9 ? startY : startY - 1;
+    // אירוע ישן ללא שנה — משויך לשנת הלימודים הנוכחית
+    if (e.startYear == null) return defaultYear;
+    return e.startMonth >= 9 ? e.startYear : e.startYear - 1;
   }
 
   function eventMatchesCat(e: ViewEvent, catId: string): boolean {
@@ -210,7 +215,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       if (searchLower) {
         const catNames = evCats.map(ec => allCats.find(c => c.id === ec)?.name).filter(Boolean).join(" ");
         const haystack = [
-          e.name, e.location, e.responsible,
+          e.name, e.location, e.responsible, e.description,
           ...(e.ageGroups || []), catNames,
         ].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(searchLower)) return false;
@@ -235,9 +240,12 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       const eDays = DAYS_IN_MONTH[ev.endMonth]   || 30;
       const sOff = ev.startDay ? Math.max(0, (ev.startDay - 1) / sDays) : 0;
       const eOff = ev.endDay   ? Math.min(1,  ev.endDay      / eDays)   : 1;
-      const start   = (sIdx + sOff) * monthW;
-      const realEnd = (eIdx + eOff) * monthW;
-      return { start, end: start + Math.max(realEnd - start, MIN_EVENT_WIDTH) };
+      const rawStart = (sIdx + sOff) * monthW;
+      const realEnd  = (eIdx + eOff) * monthW;
+      const w = Math.max(realEnd - rawStart, MIN_EVENT_WIDTH);
+      // אותו clamp כמו eventStyle כדי שחישוב הנתיבים יתאים למיקום בפועל
+      const start = Math.max(0, Math.min(rawStart, 100 - w));
+      return { start, end: start + w };
     };
     for (const cat of visibleCats) {
       const catEvents = filteredEvents.filter(e => eventMatchesCat(e, cat.id));
@@ -276,10 +284,20 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     const cats = e.categoryIds && e.categoryIds.length > 0 ? e.categoryIds : [e.categoryId];
     return cats.some(ec => allCats.find(c => c.id === ec && (c.department === department || c.department === "both")));
   });
-  const thisMonthEvs = myEvents.filter(e => e.startMonth === new Date().getMonth() + 1);
+  const thisMonthEvs = myEvents.filter(e =>
+    e.startMonth === new Date().getMonth() + 1 && eventSchoolYear(e) === defaultYear
+  );
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<"annual" | "monthly">("annual");
+
+  // גלילה לפאנל הפרטים רק כשנבחר אירוע — לא בכל רינדור
+  const detailPanelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (selectedEvent) {
+      detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [selectedEvent]);
 
   // ייבוא ICS
   const [showImport, setShowImport] = useState(false);
@@ -330,7 +348,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   function ymdToDate(year: number | null | undefined, month: number, day: number): string {
-    const y = year ?? (month >= 9 ? 2025 : 2026);
+    const y = year ?? (month >= 9 ? defaultYear : defaultYear + 1);
     return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
   function dateToYMD(dateStr: string): { year: number; month: number; day: number } {
@@ -424,24 +442,39 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   useEffect(() => {
-    if (myCategories.length && newEvent.categoryIds.length === 0) {
+    // ברירת מחדל רק כשהטופס סגור — לא לדרוס בחירה של המשתמש בתוך הטופס
+    if (!showNewEvent && myCategories.length && newEvent.categoryIds.length === 0) {
       setNewEvent(p => ({ ...p, categoryIds: [myCategories[0].id] }));
     }
-  }, [myCategories, newEvent.categoryIds.length]);
+  }, [myCategories, newEvent.categoryIds.length, showNewEvent]);
 
   async function handleCreateEvent(skipConflictCheck = false) {
+    if (!newEvent.startDate) { toast("יש לבחור תאריך התחלה", "error"); return; }
+    const endDateStr = newEvent.endDate && newEvent.endDate >= newEvent.startDate
+      ? newEvent.endDate
+      : newEvent.startDate;
     const start = dateToYMD(newEvent.startDate);
-    const end   = dateToYMD(newEvent.endDate);
+    const end   = dateToYMD(endDateStr);
 
     if (!editingId && !skipConflictCheck) {
-      const conflicts = allViewEvents.filter(e =>
-        e.startMonth <= end.month && e.endMonth >= start.month
-      ).map(e => e.name);
+      // השוואה לפי סדר שנת לימודים (ספט→אוג) ברמת יום, רק מול אירועים באותה שנה
+      const newSchoolYear = start.month >= 9 ? start.year : start.year - 1;
+      const posKey = (m: number, d: number) => SCHOOL_YEAR_MONTHS.indexOf(m) * 32 + d;
+      const endOfYear = posKey(8, 31);
+      const newStart = posKey(start.month, start.day);
+      const newEnd   = Math.max(newStart, Math.min(posKey(end.month, end.day), endOfYear));
+      const conflicts = allViewEvents.filter(e => {
+        if (eventSchoolYear(e) !== newSchoolYear) return false;
+        const evStart = posKey(e.startMonth, e.startDay || 1);
+        let evEnd = posKey(e.endMonth, e.endDay || DAYS_IN_MONTH[e.endMonth] || 31);
+        if (evEnd < evStart) evEnd = endOfYear;
+        return evStart <= newEnd && evEnd >= newStart;
+      }).map(e => e.name);
       if (conflicts.length > 0) { setConflictWarning(conflicts.slice(0, 3)); return; }
     }
     setCreating(true);
     const payload = {
-      name:         newEvent.name,
+      name:         newEvent.name.trim(),
       category_ids: newEvent.categoryIds,
       start_month:  start.month,
       end_month:    end.month,
@@ -670,7 +703,11 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </div>
 
           <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
-            {([{ id: "all", label: "כל המחלקות" }, { id: "mine", label: "המחלקה שלי" }] as const).map(f => (
+            {([
+              { id: "all", label: "הכל" },
+              { id: "education", label: "חינוך" },
+              { id: "youth", label: "נוער" },
+            ] as const).map(f => (
               <button key={f.id} onClick={() => setFilterDept(f.id)} style={{
                 background: filterDept === f.id ? "#fff" : "transparent",
                 border: "none", padding: "6px 12px", fontSize: 12,
@@ -719,11 +756,24 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
         {/* אירועים קרובים — Quick View */}
         {(() => {
+          const t = new Date();
+          const tMonth = t.getMonth() + 1;
+          const nextMonth = (tMonth % 12) + 1;
           const upcoming = filteredEvents
             .filter(e => {
-              const t = new Date();
-              const tMonth = t.getMonth() + 1;
-              return e.startMonth === tMonth || e.startMonth === (tMonth % 12) + 1;
+              if (e.startMonth !== tMonth && e.startMonth !== nextMonth) return false;
+              // אירוע החודש שכבר הסתיים — לא "קרוב"
+              if (e.startMonth === tMonth && e.endMonth === e.startMonth) {
+                const endsOn = e.endDay ?? e.startDay ?? 31;
+                if (endsOn < t.getDate()) return false;
+              }
+              return true;
+            })
+            .sort((a, b) => {
+              const am = SCHOOL_YEAR_MONTHS.indexOf(a.startMonth);
+              const bm = SCHOOL_YEAR_MONTHS.indexOf(b.startMonth);
+              if (am !== bm) return am - bm;
+              return (a.startDay || 1) - (b.startDay || 1);
             })
             .slice(0, 5);
           if (upcoming.length === 0) return null;
@@ -778,13 +828,14 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                   id: e.id, name: e.name, categoryId: e.categoryId,
                   startMonth: e.startMonth, endMonth: e.endMonth,
                   startDay: e.startDay, endDay: e.endDay,
+                  startYear: e.startYear, endYear: e.endYear,
                   color: cat?.color || "#888",
                   ageGroups: e.ageGroups, location: e.location,
                 };
               })}
               onEventClick={id => setSelectedEvent(id)}
               onDayClick={(month, day) => {
-                const year = month >= 9 ? 2025 : 2026;
+                const year = month >= 9 ? schoolYear : schoolYear + 1;
                 const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 setNewEvent(p => ({ ...p, startDate: dateStr, endDate: dateStr }));
                 setShowNewEvent(true);
@@ -910,7 +961,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
         {/* פרטי אירוע שנבחר */}
         {selectedEventData && (
-          <div ref={el => { if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }} style={{
+          <div ref={detailPanelRef} style={{
             padding: "1.25rem 1.5rem", marginBottom: 16,
             background: "#fff", border: `2px solid ${selectedCat?.color || cfg.primary}`,
             borderRadius: "var(--radius-lg)", position: "relative",
@@ -1049,8 +1100,37 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* שם האירוע */}
+              <div>
+                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>שם האירוע *</label>
+                <input
+                  value={newEvent.name}
+                  onChange={e => setNewEvent(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="למשל: יום פתוח גנים"
+                  style={{ width: "100%", padding: "8px 11px", fontSize: 13, border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "inherit", outline: "none" }}
+                />
+              </div>
+
+              {/* תיאור — מיד אחרי השם */}
+              <div>
+                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                  תיאור האירוע
+                </label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="כמה מילים על האירוע, מטרות, פרטים נוספים..."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "8px 11px", fontSize: 13,
+                    border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                    fontFamily: "inherit", outline: "none", resize: "vertical",
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
+
               {[
-                { label: "שם האירוע *", key: "name", type: "text", placeholder: "למשל: יום פתוח גנים" },
                 { label: "אחראי האירוע *", key: "responsible", type: "text", placeholder: "שם הרכז" },
                 { label: "קהל יעד / גיל", key: "ageGroups", type: "text", placeholder: "למשל: כיתות ז-ט" },
               ].map(field => (
@@ -1070,25 +1150,6 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                   />
                 </div>
               ))}
-
-              {/* הערות / תיאור */}
-              <div>
-                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  הערות / תיאור
-                </label>
-                <textarea
-                  value={newEvent.description}
-                  onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="כמה מילים על האירוע, מטרות, פרטים נוספים..."
-                  rows={3}
-                  style={{
-                    width: "100%", padding: "8px 11px", fontSize: 13,
-                    border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
-                    fontFamily: "inherit", outline: "none", resize: "vertical",
-                    lineHeight: 1.5,
-                  }}
-                />
-              </div>
 
               {/* פוסטר האירוע */}
               <div>
@@ -1404,7 +1465,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               </p>
 
               {!conflictWarning && (() => {
-                const canSave = !!newEvent.name && newEvent.categoryIds.length > 0;
+                const canSave = !!newEvent.name.trim() && newEvent.categoryIds.length > 0;
                 return (
                   <button
                     onClick={() => handleCreateEvent(false)}
