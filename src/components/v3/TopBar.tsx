@@ -89,6 +89,22 @@ export function TopBar({
         </div>
       </Link>
 
+      {/* Education logo */}
+      {variant === "edu" && (
+        <>
+          <div style={{
+            width: 1, height: 28,
+            background: "rgba(255,255,255,0.3)",
+          }} />
+          <Image src="/logo-education.png" alt="מערכת החינוך אופקים"
+            width={80} height={32}
+            style={{
+              objectFit: "contain", height: 30, width: "auto",
+              filter: "brightness(0) invert(1)",
+            }} />
+        </>
+      )}
+
       {/* Ofaktivi logo */}
       {showOfaktiviLogo && (
         <>
