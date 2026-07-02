@@ -585,40 +585,48 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
       <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* Hello Bar V3 */}
+        {/* Hero Banner */}
         <div style={{
-          background: `linear-gradient(135deg, ${cfg.lighter} 0%, #FFF8EE 100%)`,
-          borderRadius: "var(--r-lg)", padding: "1.25rem 1.5rem",
+          background: `linear-gradient(135deg, ${cfg.primary} 0%, ${cfg.primaryDark} 100%)`,
+          borderRadius: 20, padding: "1.5rem 1.75rem",
           marginBottom: 16, display: "flex", alignItems: "center",
           justifyContent: "space-between", flexWrap: "wrap", gap: 14,
           position: "relative", overflow: "hidden",
+          boxShadow: `0 8px 32px ${cfg.primary}55`,
         }}>
-          <div style={{ position: "absolute", top: -40, left: -40, width: 140, height: 140, borderRadius: "50%", background: cfg.light, filter: "blur(40px)", opacity: 0.5 }} />
+          {/* עיגולי רקע דקורטיביים */}
+          <div style={{ position: "absolute", top: -30, left: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+          <div style={{ position: "absolute", bottom: -40, left: 80, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
+          <div style={{ position: "absolute", top: 10, left: 160, width: 60, height: 60, borderRadius: "50%", background: "rgba(255,255,255,0.1)" }} />
+
           <div style={{ position: "relative" }}>
-            <span className="eyebrow" style={{ color: cfg.primaryDark, fontSize: 10 }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginBottom: 4, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
               {user?.full_name ? `שלום, ${user.full_name}` : "ברוכים הבאים"} · {new Date().toLocaleDateString("he-IL", { weekday: "long" })}
-            </span>
-            <h1 className="disp" style={{ fontSize: 28, margin: "4px 0 4px", color: cfg.primaryDark }}>
+            </div>
+            <h1 className="disp" style={{ fontSize: 30, margin: "0 0 6px", color: "#fff", textShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
               גאנט {SCHOOL_YEARS.find(y => y.id === schoolYear)?.label.split(" ")[0] || "השנה"}
             </h1>
-            <p style={{ fontSize: 12, color: cfg.primaryDark, opacity: 0.75, margin: 0 }}>
-              לחץ על "+ אירוע חדש" כדי להוסיף, או לחץ על אירוע קיים לערוך
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", margin: 0 }}>
+              {cfg.label} — לחץ על אירוע כדי לערוך
             </p>
           </div>
-          <div style={{ display: "flex", gap: 10, position: "relative" }}>
+
+          <div style={{ display: "flex", gap: 10, position: "relative", flexWrap: "wrap" }}>
             {[
               { label: "אירועים", value: myEvents.length },
               { label: "החודש",  value: thisMonthEvs.length },
               { label: "סה״כ",   value: allViewEvents.length },
             ].map(s => (
               <div key={s.label} style={{
-                textAlign: "center", background: "#fff",
-                borderRadius: 12, padding: "10px 16px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                minWidth: 70,
+                textAlign: "center",
+                background: "rgba(255,255,255,0.18)",
+                backdropFilter: "blur(8px)",
+                borderRadius: 14, padding: "10px 18px",
+                border: "1px solid rgba(255,255,255,0.25)",
+                minWidth: 64,
               }}>
-                <div className="num" style={{ fontSize: 22, fontWeight: 700, color: cfg.primary, lineHeight: 1 }}>{s.value}</div>
-                <div className="eyebrow" style={{ marginTop: 4, fontSize: 9 }}>{s.label}</div>
+                <div className="num" style={{ fontSize: 24, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{s.value}</div>
+                <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.8)", fontFamily: "var(--font-mono)" }}>{s.label}</div>
               </div>
             ))}
           </div>

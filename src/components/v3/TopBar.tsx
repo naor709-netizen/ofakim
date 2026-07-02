@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Tag } from "./Tag";
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
@@ -61,63 +60,49 @@ export function TopBar({
       background: c.bg, color: c.text,
       borderBottom: variant === "neutral" ? "0.5px solid var(--line)" : "none",
       display: "flex", alignItems: "center",
-      padding: "10px 16px", gap: 10, flexWrap: "nowrap",
+      padding: "10px 16px", gap: 12, flexWrap: "nowrap",
       overflowX: "auto", position: "relative", zIndex: 10,
       scrollbarWidth: "none",
     }}>
-      {/* Logos */}
-      <Link href="/" style={{
-        display: "flex", alignItems: "center", gap: 10,
-        textDecoration: "none", color: "inherit", flexShrink: 0,
-      }}>
-        <Image src="/logo-ofakim.png" alt="עיריית אופקים"
-          width={36} height={36}
-          style={{
-            objectFit: "contain",
-            filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none",
-          }} />
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-display)" }}>
-            {title || "פורטל אופקים"}
-          </span>
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: 9,
-            letterSpacing: "0.1em", textTransform: "uppercase",
-            opacity: variant === "neutral" ? 0.6 : 0.85,
-          }}>
-            {subtitle || "עיריית אופקים · חינוך ונוער"}
-          </span>
-        </div>
-      </Link>
 
-      {/* Education logo — shown only on edu variant */}
-      {variant === "edu" && (
-        <>
-          <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)", flexShrink: 0 }} />
-          <div style={{
-            background: "rgba(255,255,255,0.92)", borderRadius: 8,
-            padding: "3px 8px", display: "flex", alignItems: "center", flexShrink: 0,
-          }}>
-            <Image src="/logo-education.png" alt="מערכת החינוך אופקים"
-              width={72} height={28}
-              style={{ objectFit: "contain", height: 26, width: "auto" }} />
+      {/* Education variant: show only education logo */}
+      {variant === "edu" ? (
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit", flexShrink: 0 }}>
+          <div style={{ background: "rgba(255,255,255,0.95)", borderRadius: 10, padding: "4px 10px", display: "flex", alignItems: "center" }}>
+            <Image src="/logo-education.png" alt="מערכת החינוך אופקים" width={90} height={34}
+              style={{ objectFit: "contain", height: 32, width: "auto" }} />
           </div>
-        </>
-      )}
-
-      {/* Ofaktivi logo */}
-      {showOfaktiviLogo && (
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "var(--font-display)" }}>
+              {title || "מנהל החינוך"}
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.8 }}>
+              {subtitle || "EDUCATION · GANTT"}
+            </span>
+          </div>
+        </Link>
+      ) : (
+        /* All other variants: Ofakim logo + optional Ofaktivi */
         <>
-          <div style={{
-            width: 1, height: 28, flexShrink: 0,
-            background: variant === "neutral" ? "var(--line)" : "rgba(255,255,255,0.3)",
-          }} />
-          <Image src="/logo-ofaktivi.png" alt="אופקטיבי"
-            width={92} height={32}
-            style={{
-              objectFit: "contain", height: 28, width: "auto", flexShrink: 0,
-              filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none",
-            }} />
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit", flexShrink: 0 }}>
+            <Image src="/logo-ofakim.png" alt="עיריית אופקים" width={36} height={36}
+              style={{ objectFit: "contain", filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none" }} />
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-display)" }}>
+                {title || "פורטל אופקים"}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", opacity: variant === "neutral" ? 0.6 : 0.85 }}>
+                {subtitle || "עיריית אופקים · חינוך ונוער"}
+              </span>
+            </div>
+          </Link>
+          {showOfaktiviLogo && (
+            <>
+              <div style={{ width: 1, height: 28, flexShrink: 0, background: variant === "neutral" ? "var(--line)" : "rgba(255,255,255,0.3)" }} />
+              <Image src="/logo-ofaktivi.png" alt="אופקטיבי" width={92} height={32}
+                style={{ objectFit: "contain", height: 28, width: "auto", flexShrink: 0, filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none" }} />
+            </>
+          )}
         </>
       )}
 
@@ -125,10 +110,7 @@ export function TopBar({
       <div style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         {rightContent}
         {backHref && (
-          <Link href={backHref} style={{
-            color: variant === "neutral" ? "var(--ink2)" : "rgba(255,255,255,0.85)",
-            textDecoration: "none", fontSize: 12,
-          }}>
+          <Link href={backHref} style={{ color: variant === "neutral" ? "var(--ink2)" : "rgba(255,255,255,0.85)", textDecoration: "none", fontSize: 12 }}>
             → דף הבית
           </Link>
         )}
@@ -142,8 +124,7 @@ export function TopBar({
             }}>
               <span style={{
                 width: 22, height: 22, borderRadius: "50%",
-                background: variant === "neutral" ? "var(--ink)" : "rgba(255,255,255,0.3)",
-                color: variant === "neutral" ? "#fff" : "#fff",
+                background: "rgba(255,255,255,0.3)", color: "#fff",
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontWeight: 600,
               }}>{user.full_name.trim().charAt(0)}</span>
@@ -165,23 +146,15 @@ export function TopBar({
                   </div>
                 </div>
                 {user.role === "admin" && (
-                  <Link href="/admin" onClick={() => setMenuOpen(false)} style={menuItem}>
-                    דשבורד ניהול
-                  </Link>
+                  <Link href="/admin" onClick={() => setMenuOpen(false)} style={menuItem}>דשבורד ניהול</Link>
                 )}
                 {user.department === "education" && (
-                  <Link href="/education" onClick={() => setMenuOpen(false)} style={menuItem}>
-                    גאנט מנהל החינוך
-                  </Link>
+                  <Link href="/education" onClick={() => setMenuOpen(false)} style={menuItem}>גאנט מנהל החינוך</Link>
                 )}
                 {user.department === "youth" && (
-                  <Link href="/youth" onClick={() => setMenuOpen(false)} style={menuItem}>
-                    גאנט מחלקת הנוער
-                  </Link>
+                  <Link href="/youth" onClick={() => setMenuOpen(false)} style={menuItem}>גאנט מחלקת הנוער</Link>
                 )}
-                <Link href="/luach" onClick={() => setMenuOpen(false)} style={menuItem}>
-                  לוח התושבים
-                </Link>
+                <Link href="/luach" onClick={() => setMenuOpen(false)} style={menuItem}>לוח התושבים</Link>
                 <button onClick={handleLogout} style={{ ...menuItem, width: "100%", textAlign: "right", border: "none", background: "transparent", cursor: "pointer", color: "#b91c1c" }}>
                   יציאה
                 </button>
