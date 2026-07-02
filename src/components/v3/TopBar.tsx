@@ -61,13 +61,14 @@ export function TopBar({
       background: c.bg, color: c.text,
       borderBottom: variant === "neutral" ? "0.5px solid var(--line)" : "none",
       display: "flex", alignItems: "center",
-      padding: "12px 24px", gap: 14, flexWrap: "wrap",
-      position: "relative", zIndex: 10,
+      padding: "10px 16px", gap: 10, flexWrap: "nowrap",
+      overflowX: "auto", position: "relative", zIndex: 10,
+      scrollbarWidth: "none",
     }}>
       {/* Logos */}
       <Link href="/" style={{
-        display: "flex", alignItems: "center", gap: 12,
-        textDecoration: "none", color: "inherit",
+        display: "flex", alignItems: "center", gap: 10,
+        textDecoration: "none", color: "inherit", flexShrink: 0,
       }}>
         <Image src="/logo-ofakim.png" alt="עיריית אופקים"
           width={36} height={36}
@@ -89,19 +90,18 @@ export function TopBar({
         </div>
       </Link>
 
-      {/* Education logo */}
+      {/* Education logo — shown only on edu variant */}
       {variant === "edu" && (
         <>
+          <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)", flexShrink: 0 }} />
           <div style={{
-            width: 1, height: 28,
-            background: "rgba(255,255,255,0.3)",
-          }} />
-          <Image src="/logo-education.png" alt="מערכת החינוך אופקים"
-            width={80} height={32}
-            style={{
-              objectFit: "contain", height: 30, width: "auto",
-              filter: "brightness(0) invert(1)",
-            }} />
+            background: "rgba(255,255,255,0.92)", borderRadius: 8,
+            padding: "3px 8px", display: "flex", alignItems: "center", flexShrink: 0,
+          }}>
+            <Image src="/logo-education.png" alt="מערכת החינוך אופקים"
+              width={72} height={28}
+              style={{ objectFit: "contain", height: 26, width: "auto" }} />
+          </div>
         </>
       )}
 
@@ -109,20 +109,20 @@ export function TopBar({
       {showOfaktiviLogo && (
         <>
           <div style={{
-            width: 1, height: 28,
+            width: 1, height: 28, flexShrink: 0,
             background: variant === "neutral" ? "var(--line)" : "rgba(255,255,255,0.3)",
           }} />
           <Image src="/logo-ofaktivi.png" alt="אופקטיבי"
             width={92} height={32}
             style={{
-              objectFit: "contain", height: 30, width: "auto",
+              objectFit: "contain", height: 28, width: "auto", flexShrink: 0,
               filter: variant !== "neutral" ? "brightness(0) invert(1)" : "none",
             }} />
         </>
       )}
 
       {/* Right content */}
-      <div style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         {rightContent}
         {backHref && (
           <Link href={backHref} style={{
