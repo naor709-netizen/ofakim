@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -81,10 +81,8 @@ function eventStyle(
   const right = (endIdx   + endOffset)   * monthW;
   // מינימום רוחב כדי שטקסט יהיה קריא (אירוע יום-אחד מורחב ויזואלית)
   const width = Math.max(right - left, MIN_EVENT_WIDTH);
-  // אירוע בסוף השנה לא יגלוש מחוץ לגאנט (ייחתך ע"י overflow)
-  const clampedLeft = Math.max(0, Math.min(left, 100 - width));
 
-  return { insetInlineStart: `${clampedLeft}%`, width: `calc(${width}% - 2px)`, background: color };
+  return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
 }
 
 type ViewEvent = {
@@ -195,9 +193,8 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
   // מחזיר את שנת הלימודים של אירוע (שנת ספטמבר שלו)
   function eventSchoolYear(e: ViewEvent): number {
-    // אירוע ישן ללא שנה — משויך לשנת הלימודים הנוכחית
-    if (e.startYear == null) return defaultYear;
-    return e.startMonth >= 9 ? e.startYear : e.startYear - 1;
+    const startY = e.startYear ?? (e.startMonth >= 9 ? 2025 : 2026);
+    return e.startMonth >= 9 ? startY : startY - 1;
   }
 
   function eventMatchesCat(e: ViewEvent, catId: string): boolean {
@@ -215,7 +212,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       if (searchLower) {
         const catNames = evCats.map(ec => allCats.find(c => c.id === ec)?.name).filter(Boolean).join(" ");
         const haystack = [
-          e.name, e.location, e.responsible, e.description,
+          e.name, e.location, e.responsible,
           ...(e.ageGroups || []), catNames,
         ].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(searchLower)) return false;
@@ -240,12 +237,9 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       const eDays = DAYS_IN_MONTH[ev.endMonth]   || 30;
       const sOff = ev.startDay ? Math.max(0, (ev.startDay - 1) / sDays) : 0;
       const eOff = ev.endDay   ? Math.min(1,  ev.endDay      / eDays)   : 1;
-      const rawStart = (sIdx + sOff) * monthW;
-      const realEnd  = (eIdx + eOff) * monthW;
-      const w = Math.max(realEnd - rawStart, MIN_EVENT_WIDTH);
-      // אותו clamp כמו eventStyle כדי שחישוב הנתיבים יתאים למיקום בפועל
-      const start = Math.max(0, Math.min(rawStart, 100 - w));
-      return { start, end: start + w };
+      const start   = (sIdx + sOff) * monthW;
+      const realEnd = (eIdx + eOff) * monthW;
+      return { start, end: start + Math.max(realEnd - start, MIN_EVENT_WIDTH) };
     };
     for (const cat of visibleCats) {
       const catEvents = filteredEvents.filter(e => eventMatchesCat(e, cat.id));
@@ -284,27 +278,10 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     const cats = e.categoryIds && e.categoryIds.length > 0 ? e.categoryIds : [e.categoryId];
     return cats.some(ec => allCats.find(c => c.id === ec && (c.department === department || c.department === "both")));
   });
-  const thisMonthEvs = myEvents.filter(e =>
-    e.startMonth === new Date().getMonth() + 1 && eventSchoolYear(e) === defaultYear
-  );
+  const thisMonthEvs = myEvents.filter(e => e.startMonth === new Date().getMonth() + 1);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<"annual" | "monthly">("annual");
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 768px)");
-    if (mq.matches) setView("monthly");
-    const handler = (e: MediaQueryListEvent) => setView(e.matches ? "monthly" : "annual");
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  const detailPanelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (selectedEvent) {
-      detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [selectedEvent]);
 
   // ייבוא ICS
   const [showImport, setShowImport] = useState(false);
@@ -355,7 +332,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   function ymdToDate(year: number | null | undefined, month: number, day: number): string {
-    const y = year ?? (month >= 9 ? defaultYear : defaultYear + 1);
+    const y = year ?? (month >= 9 ? 2025 : 2026);
     return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
   function dateToYMD(dateStr: string): { year: number; month: number; day: number } {
@@ -380,18 +357,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     description: "",
     imageUrl: "",
   });
-  const [uploadingPoster, setUploadingPoster] = useState(false);
-
-  async function handlePosterFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingPoster(true);
-    const { url, error } = await uploadEventPoster(file);
-    setUploadingPoster(false);
-    e.target.value = "";
-    if (error || !url) { toast("שגיאה בהעלאת הפוסטר: " + (error ?? ""), "error"); return; }
-    setNewEvent(prev => ({ ...prev, imageUrl: url }));
-  }
+  const [posterUploading, setPosterUploading] = useState(false);
 
   // יצירת תשתית inline בתוך טופס האירוע
   const [showInfraInline, setShowInfraInline] = useState(false);
@@ -449,39 +415,24 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   useEffect(() => {
-    // ברירת מחדל רק כשהטופס סגור — לא לדרוס בחירה של המשתמש בתוך הטופס
-    if (!showNewEvent && myCategories.length && newEvent.categoryIds.length === 0) {
+    if (myCategories.length && newEvent.categoryIds.length === 0) {
       setNewEvent(p => ({ ...p, categoryIds: [myCategories[0].id] }));
     }
-  }, [myCategories, newEvent.categoryIds.length, showNewEvent]);
+  }, [myCategories, newEvent.categoryIds.length]);
 
   async function handleCreateEvent(skipConflictCheck = false) {
-    if (!newEvent.startDate) { toast("יש לבחור תאריך התחלה", "error"); return; }
-    const endDateStr = newEvent.endDate && newEvent.endDate >= newEvent.startDate
-      ? newEvent.endDate
-      : newEvent.startDate;
     const start = dateToYMD(newEvent.startDate);
-    const end   = dateToYMD(endDateStr);
+    const end   = dateToYMD(newEvent.endDate);
 
     if (!editingId && !skipConflictCheck) {
-      // השוואה לפי סדר שנת לימודים (ספט→אוג) ברמת יום, רק מול אירועים באותה שנה
-      const newSchoolYear = start.month >= 9 ? start.year : start.year - 1;
-      const posKey = (m: number, d: number) => SCHOOL_YEAR_MONTHS.indexOf(m) * 32 + d;
-      const endOfYear = posKey(8, 31);
-      const newStart = posKey(start.month, start.day);
-      const newEnd   = Math.max(newStart, Math.min(posKey(end.month, end.day), endOfYear));
-      const conflicts = allViewEvents.filter(e => {
-        if (eventSchoolYear(e) !== newSchoolYear) return false;
-        const evStart = posKey(e.startMonth, e.startDay || 1);
-        let evEnd = posKey(e.endMonth, e.endDay || DAYS_IN_MONTH[e.endMonth] || 31);
-        if (evEnd < evStart) evEnd = endOfYear;
-        return evStart <= newEnd && evEnd >= newStart;
-      }).map(e => e.name);
+      const conflicts = allViewEvents.filter(e =>
+        e.startMonth <= end.month && e.endMonth >= start.month
+      ).map(e => e.name);
       if (conflicts.length > 0) { setConflictWarning(conflicts.slice(0, 3)); return; }
     }
     setCreating(true);
     const payload = {
-      name:         newEvent.name.trim(),
+      name:         newEvent.name,
       category_ids: newEvent.categoryIds,
       start_month:  start.month,
       end_month:    end.month,
@@ -694,7 +645,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             </div>
           </div>
 
-          <div className="gantt-desktop-only" style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
+          <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
             {([{ id: "annual", label: "שנתי" }, { id: "monthly", label: "חודשי" }] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)} style={{
                 background: view === v.id ? "#fff" : "transparent",
@@ -710,11 +661,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </div>
 
           <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
-            {([
-              { id: "all", label: "הכל" },
-              { id: "education", label: "חינוך" },
-              { id: "youth", label: "נוער" },
-            ] as const).map(f => (
+            {([{ id: "all", label: "הכל" }, { id: "education", label: "חינוך" }, { id: "youth", label: "נוער" }] as const).map(f => (
               <button key={f.id} onClick={() => setFilterDept(f.id)} style={{
                 background: filterDept === f.id ? "#fff" : "transparent",
                 border: "none", padding: "6px 12px", fontSize: 12,
@@ -763,24 +710,11 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
         {/* אירועים קרובים — Quick View */}
         {(() => {
-          const t = new Date();
-          const tMonth = t.getMonth() + 1;
-          const nextMonth = (tMonth % 12) + 1;
           const upcoming = filteredEvents
             .filter(e => {
-              if (e.startMonth !== tMonth && e.startMonth !== nextMonth) return false;
-              // אירוע החודש שכבר הסתיים — לא "קרוב"
-              if (e.startMonth === tMonth && e.endMonth === e.startMonth) {
-                const endsOn = e.endDay ?? e.startDay ?? 31;
-                if (endsOn < t.getDate()) return false;
-              }
-              return true;
-            })
-            .sort((a, b) => {
-              const am = SCHOOL_YEAR_MONTHS.indexOf(a.startMonth);
-              const bm = SCHOOL_YEAR_MONTHS.indexOf(b.startMonth);
-              if (am !== bm) return am - bm;
-              return (a.startDay || 1) - (b.startDay || 1);
+              const t = new Date();
+              const tMonth = t.getMonth() + 1;
+              return e.startMonth === tMonth || e.startMonth === (tMonth % 12) + 1;
             })
             .slice(0, 5);
           if (upcoming.length === 0) return null;
@@ -835,14 +769,13 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                   id: e.id, name: e.name, categoryId: e.categoryId,
                   startMonth: e.startMonth, endMonth: e.endMonth,
                   startDay: e.startDay, endDay: e.endDay,
-                  startYear: e.startYear, endYear: e.endYear,
                   color: cat?.color || "#888",
                   ageGroups: e.ageGroups, location: e.location,
                 };
               })}
               onEventClick={id => setSelectedEvent(id)}
               onDayClick={(month, day) => {
-                const year = month >= 9 ? schoolYear : schoolYear + 1;
+                const year = month >= 9 ? 2025 : 2026;
                 const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 setNewEvent(p => ({ ...p, startDate: dateStr, endDate: dateStr }));
                 setShowNewEvent(true);
@@ -968,7 +901,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
         {/* פרטי אירוע שנבחר */}
         {selectedEventData && (
-          <div ref={detailPanelRef} style={{
+          <div ref={el => { if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }} style={{
             padding: "1.25rem 1.5rem", marginBottom: 16,
             background: "#fff", border: `2px solid ${selectedCat?.color || cfg.primary}`,
             borderRadius: "var(--radius-lg)", position: "relative",
@@ -1013,21 +946,14 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
               {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
             </div>
+            {selectedEventData.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={selectedEventData.imageUrl} alt="פוסטר" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 8, marginBottom: 14 }} />
+            )}
             {selectedEventData.description && (
               <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                 {selectedEventData.description}
               </p>
-            )}
-            {selectedEventData.imageUrl && (
-              <img
-                src={selectedEventData.imageUrl}
-                alt="פוסטר האירוע"
-                style={{
-                  maxWidth: "100%", maxHeight: 260,
-                  objectFit: "contain", borderRadius: "var(--radius-md)",
-                  marginBottom: 14, display: "block",
-                }}
-              />
             )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => selectedEventData && startEdit(selectedEventData)} style={{
@@ -1051,22 +977,16 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       {/* מודל יצירת אירוע */}
       {showNewEvent && (
         <div style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.35)",
-          backdropFilter: "blur(6px)",
-          WebkitBackdropFilter: "blur(6px)",
-          display: "flex", alignItems: "flex-end", justifyContent: "center",
-          zIndex: 100, padding: "0 0 0 0",
-          animation: "fadeIn 0.18s ease",
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+          padding: 20,
         }} onClick={e => { if (e.target === e.currentTarget) { setShowNewEvent(false); setConflictWarning(null); setEditingId(null); }}}>
           <div style={{
-            background: "#fff",
-            borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
-            padding: "1.75rem", width: "100%", maxWidth: 520,
-            boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+            background: "#fff", borderRadius: "var(--radius-xl)",
+            padding: "1.75rem", width: "100%", maxWidth: 480,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
             position: "relative",
-            animation: "slideUp 0.22s cubic-bezier(0.2,0.8,0.2,1)",
-            maxHeight: "92dvh", overflowY: "auto",
+            maxHeight: "92vh", overflowY: "auto",
           }}>
             <button onClick={() => { setShowNewEvent(false); setConflictWarning(null); setEditingId(null); }} style={{
               position: "absolute", left: 16, top: 16,
@@ -1115,19 +1035,25 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {/* שם האירוע */}
               <div>
-                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>שם האירוע *</label>
+                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                  שם האירוע *
+                </label>
                 <input
                   value={newEvent.name}
                   onChange={e => setNewEvent(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="למשל: יום פתוח גנים"
-                  style={{ width: "100%", padding: "8px 11px", fontSize: 13, border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "inherit", outline: "none" }}
+                  style={{
+                    width: "100%", padding: "8px 11px", fontSize: 13,
+                    border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                    fontFamily: "inherit", outline: "none",
+                  }}
                 />
               </div>
 
-              {/* תיאור — מיד אחרי השם */}
+              {/* הערות / תיאור */}
               <div>
                 <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  תיאור האירוע
+                  הערות / תיאור
                 </label>
                 <textarea
                   value={newEvent.description}
@@ -1164,52 +1090,38 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                 </div>
               ))}
 
-              {/* פוסטר האירוע */}
+              {/* תמונת פוסטר */}
               <div>
                 <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  פוסטר האירוע (אופציונלי)
+                  תמונת פוסטר (אופציונלי)
                 </label>
-                {newEvent.imageUrl ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <img src={newEvent.imageUrl} alt="פוסטר" style={{
-                      width: 64, height: 64, objectFit: "cover",
-                      borderRadius: "var(--radius-md)", border: "0.5px solid var(--border)",
-                    }} />
-                    <button
-                      type="button"
-                      onClick={() => setNewEvent(prev => ({ ...prev, imageUrl: "" }))}
-                      style={{
-                        fontSize: 12, color: "var(--danger)", background: "transparent",
-                        border: "none", cursor: "pointer", fontFamily: "inherit",
-                      }}
-                    >
-                      ✕ הסר פוסטר
-                    </button>
+                {newEvent.imageUrl && (
+                  <div style={{ marginBottom: 8, position: "relative", display: "inline-block" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={newEvent.imageUrl} alt="פוסטר" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "0.5px solid var(--border)" }} />
+                    <button type="button" onClick={() => setNewEvent(p => ({ ...p, imageUrl: "" }))} style={{
+                      position: "absolute", top: -6, right: -6, width: 20, height: 20,
+                      borderRadius: "50%", border: "none", background: "#ef4444", color: "#fff",
+                      cursor: "pointer", fontSize: 12, lineHeight: 1,
+                    }}>×</button>
                   </div>
-                ) : (
-                  <>
-                    <input
-                      id={`poster-upload-${department}`}
-                      type="file"
-                      accept="image/*"
-                      onChange={handlePosterFileChange}
-                      style={{ display: "none" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById(`poster-upload-${department}`)?.click()}
-                      disabled={uploadingPoster}
-                      style={{
-                        width: "100%", padding: "10px", fontSize: 12.5, fontWeight: 500,
-                        border: `1.5px dashed ${cfg.light}`, borderRadius: "var(--radius-md)",
-                        background: cfg.lighter, color: cfg.primaryDark,
-                        cursor: uploadingPoster ? "not-allowed" : "pointer", fontFamily: "inherit",
-                      }}
-                    >
-                      {uploadingPoster ? "מעלה..." : "🖼️ העלאת פוסטר"}
-                    </button>
-                  </>
                 )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={posterUploading}
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setPosterUploading(true);
+                    const { url, error } = await uploadEventPoster(file);
+                    setPosterUploading(false);
+                    if (error || !url) { toast("שגיאה בהעלאת תמונה: " + (error ?? ""), "error"); return; }
+                    setNewEvent(p => ({ ...p, imageUrl: url }));
+                  }}
+                  style={{ fontSize: 12, color: "var(--text-secondary)" }}
+                />
+                {posterUploading && <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>מעלה תמונה...</span>}
               </div>
 
               {/* שדה מיקום: בחירה מהמאגר + טקסט חופשי + יצירת תשתית inline */}
@@ -1478,7 +1390,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
               </p>
 
               {!conflictWarning && (() => {
-                const canSave = !!newEvent.name.trim() && newEvent.categoryIds.length > 0;
+                const canSave = !!newEvent.name && newEvent.categoryIds.length > 0;
                 return (
                   <button
                     onClick={() => handleCreateEvent(false)}
@@ -1517,17 +1429,10 @@ export default function StaffGantt({ department }: StaffGanttProps) {
       <BotChat />
 
       <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
         @media (max-width: 768px) {
+          .gantt-table { display: none !important; }
+          .mobile-events { display: flex !important; }
           .hello-bar-stats { display: none !important; }
-          .gantt-desktop-only { display: none !important; }
         }
       `}</style>
     </div>
