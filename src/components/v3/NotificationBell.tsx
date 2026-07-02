@@ -9,6 +9,11 @@ export function NotificationBell({ adminOnly = false }: { adminOnly?: boolean })
   const [pendingUsers, setPendingUsers] = useState<AppUser[]>([]);
   const [open, setOpen] = useState(false);
 
+  async function refresh() {
+    const users = await getAllUsers();
+    setPendingUsers(users.filter(u => !u.active));
+  }
+
   useEffect(() => {
     if (!adminOnly) return;
     refresh();
@@ -18,11 +23,6 @@ export function NotificationBell({ adminOnly = false }: { adminOnly?: boolean })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [adminOnly]);
-
-  async function refresh() {
-    const users = await getAllUsers();
-    setPendingUsers(users.filter(u => !u.active));
-  }
 
   if (!adminOnly) return null;
 

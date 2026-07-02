@@ -142,8 +142,9 @@ export default function AdminDashboard() {
   })).filter(c => c.count > 0).sort((a, b) => b.count - a.count);
   const maxCat = Math.max(...byCategory.map(c => c.count), 1);
 
+  const now = useMemo(() => Date.now(), []);
   function timeAgo(iso: string) {
-    const diff = Date.now() - new Date(iso).getTime();
+    const diff = now - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "עכשיו";
     if (mins < 60) return `לפני ${mins} דק׳`;
