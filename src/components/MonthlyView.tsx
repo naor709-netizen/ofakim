@@ -33,6 +33,12 @@ const MONTH_NAMES_FULL = [
   "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
 ];
 
+// שנת הלימודים הנוכחית (שנת הספטמבר שלה) — fallback לאירועים ללא שנה
+function currentSchoolYear(): number {
+  const t = new Date();
+  return t.getMonth() + 1 >= 9 ? t.getFullYear() : t.getFullYear() - 1;
+}
+
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
 }
@@ -81,8 +87,9 @@ export default function MonthlyView({
   function eventsForDay(day: number): MonthEvent[] {
     return events.filter(e => {
       // בדוק התאמת שנה - אם יש startYear/endYear
-      const evStartYear = e.startYear ?? (e.startMonth >= 9 ? 2025 : 2026);
-      const evEndYear   = e.endYear   ?? (e.endMonth   >= 9 ? 2025 : 2026);
+      const sy = currentSchoolYear();
+      const evStartYear = e.startYear ?? (e.startMonth >= 9 ? sy : sy + 1);
+      const evEndYear   = e.endYear   ?? (e.endMonth   >= 9 ? sy : sy + 1);
 
       if (e.startMonth === currentMonth && e.endMonth === currentMonth) {
         if (evStartYear !== currentYear) return false;

@@ -51,8 +51,8 @@ export default function LandingPage() {
       .eq("status", "published")
       .then(({ data }) => {
         if (!data) return;
-        const edu   = data.filter((e: { categories: { department: string } }) => e.categories?.department === "education").length;
-        const youth = data.filter((e: { categories: { department: string } }) => e.categories?.department === "youth").length;
+        const edu   = data.filter((e: { category_id: unknown; categories: { department: unknown }[] }) => (e.categories as unknown as { department: string })?.department === "education").length;
+        const youth = data.filter((e: { category_id: unknown; categories: { department: unknown }[] }) => (e.categories as unknown as { department: string })?.department === "youth").length;
         setStats({ edu, youth });
       });
   }, []);

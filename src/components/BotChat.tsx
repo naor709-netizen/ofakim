@@ -5,24 +5,31 @@ import { useState, useRef, useEffect } from "react";
 interface Message { role: "user" | "assistant"; content: string; }
 
 const SUGGESTIONS = [
-  "מה יש בחודש מרץ?",
-  "תמליץ על קמפוס לנגרות",
+  "מה קורה החודש?",
+  "תמליץ על חוג לילד בכיתה ד'",
   "אילו אירועים יש לכיתות ז'?",
-  "איזה חודש הכי עמוס?",
+  "מתי החופשה הקרובה?",
 ];
+
+const GREETING = "היי! אני אופק 👋 העוזר של פורטל אופקים.\nאפשר לשאול אותי בחופשיות על אירועים, חוגים, קמפוסים וכל מה שקורה בעיר 😊";
 
 export default function BotChat() {
   const [open, setOpen]       = useState(false);
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Message[]>([
-    { role: "assistant", content: "שלום! אני הבוט של פורטל אופקים 👋\nאפשר לשאול אותי על אירועים, קמפוסים, או לקבל המלצות תזמון." },
+    { role: "assistant", content: GREETING },
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [history, open]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   async function send(text?: string) {
     const msg = (text ?? input).trim();
@@ -37,10 +44,40 @@ export default function BotChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg, history: newHistory.slice(1) }),
       });
-      const { reply } = await res.json();
-      setHistory(h => [...h, { role: "assistant", content: reply }]);
+      if (!res.ok || !res.body) throw new Error("bad response");
+
+      // קריאת סטרימינג — התשובה נבנית על המסך תוך כדי כתיבה
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      let started = false;
+      const pushChunk = (chunk: string) => {
+        acc += chunk;
+        if (!started) {
+          started = true;
+          setLoading(false);
+          setHistory(h => [...h, { role: "assistant", content: acc }]);
+        } else {
+          setHistory(h => {
+            const copy = [...h];
+            copy[copy.length - 1] = { role: "assistant", content: acc };
+            return copy;
+          });
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) pushChunk(chunk);
+      }
+      const tail = decoder.decode();
+      if (tail) pushChunk(tail);
+      if (!started) {
+        setHistory(h => [...h, { role: "assistant", content: "התשובה התפספסה לי 😅 נסו לשאול שוב?" }]);
+      }
     } catch {
-      setHistory(h => [...h, { role: "assistant", content: "אופס, הייתה שגיאה. נסה שוב." }]);
+      setHistory(h => [...h, { role: "assistant", content: "אופס, משהו השתבש אצלי 😅 נסו שוב עוד רגע." }]);
     } finally {
       setLoading(false);
     }
@@ -51,6 +88,7 @@ export default function BotChat() {
       {/* כפתור פלואוטינג */}
       <button
         onClick={() => setOpen(o => !o)}
+        aria-label={open ? "סגור צ'אט" : "פתח צ'אט"}
         style={{
           position: "fixed", bottom: 24, left: 24, zIndex: 200,
           width: 52, height: 52, borderRadius: "50%",
@@ -68,7 +106,7 @@ export default function BotChat() {
 
       {/* חלון הצ'אט */}
       {open && (
-        <div style={{
+        <div className="bot-chat-window" style={{
           position: "fixed", bottom: 88, left: 24, zIndex: 200,
           width: 340, maxHeight: 500,
           background: "#fff", borderRadius: "var(--radius-xl)",
@@ -89,7 +127,7 @@ export default function BotChat() {
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
             }}>✨</div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>בוט אופקים</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>אופק · בוט אופקים</div>
               <div style={{ fontSize: 11, opacity: 0.8 }}>מופעל ע"י Claude AI</div>
             </div>
           </div>
@@ -131,6 +169,7 @@ export default function BotChat() {
                   fontSize: 11, padding: "4px 10px", borderRadius: 12,
                   border: "1px solid var(--bot-light)", background: "var(--bot-lighter)",
                   color: "var(--bot-dark)", cursor: "pointer",
+                  fontFamily: "inherit",
                 }}>
                   {s}
                 </button>
@@ -144,10 +183,11 @@ export default function BotChat() {
             display: "flex", gap: 8,
           }}>
             <input
+              ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && send()}
-              placeholder="שאל אותי משהו..."
+              placeholder="שאלו אותי משהו..."
               style={{
                 flex: 1, padding: "8px 12px", fontSize: 13,
                 border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
@@ -160,6 +200,7 @@ export default function BotChat() {
               color: input.trim() ? "#fff" : "var(--text-tertiary)",
               border: "none", cursor: input.trim() ? "pointer" : "not-allowed",
               fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
             }}>→</button>
           </div>
         </div>
@@ -167,6 +208,14 @@ export default function BotChat() {
 
       <style>{`
         @keyframes pulse { 0%,100% { opacity:0.3 } 50% { opacity:1 } }
+        @media (max-width: 480px) {
+          .bot-chat-window {
+            width: calc(100vw - 32px) !important;
+            left: 16px !important;
+            bottom: 84px !important;
+            max-height: min(70vh, 520px) !important;
+          }
+        }
       `}</style>
     </>
   );

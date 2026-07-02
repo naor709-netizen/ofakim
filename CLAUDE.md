@@ -15,7 +15,7 @@ Hebrew/RTL annual Gantt + event portal for Ofakim municipality (עיריית א�
 - Tailwind v4 (`@tailwindcss/postcss`); design tokens in [src/app/globals.css](src/app/globals.css)
 - Zustand, TanStack Query, Framer Motion
 - `@hebcal/core` — Hebrew dates / holidays
-- `@anthropic-ai/sdk` — bot at [src/app/api/bot/route.ts](src/app/api/bot/route.ts), model `claude-sonnet-4-5-20250929` with regex fallback
+- `@anthropic-ai/sdk` — bot at [src/app/api/bot/route.ts](src/app/api/bot/route.ts), model `claude-opus-4-8`, streams plain-text responses; regex fallback when no API key
 
 ## Routes
 

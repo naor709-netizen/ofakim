@@ -2,55 +2,129 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import {
-  CATEGORIES, DEMO_EVENTS, MONTHS_HE, SCHOOL_YEAR_MONTHS,
-  HOLIDAYS, type CategoryId, type Department,
-} from "@/lib/data";
+import { CATEGORIES, DEMO_EVENTS } from "@/lib/data";
 import { readLocalDraft, getCurrentUser, fetchProfile } from "@/lib/parent";
 import { supabase } from "@/lib/supabase";
 import { getEvents, getCategories, type DbEvent, type DbCategory } from "@/lib/events";
-import MonthlyView from "@/components/MonthlyView";
-import { generateICal, downloadICal, addToGoogleCalendar, shareWhatsapp } from "@/lib/export";
-import { useToast } from "@/components/Toast";
+import { addToGoogleCalendar, shareWhatsapp } from "@/lib/export";
 import { TopBar } from "@/components/v3/TopBar";
 
-type AgeFilter = "all" | "0-6" | "elementary" | "secondary" | "families";
-type DeptFilter = "all" | "education" | "youth";
+// פלטה עירונית — ציאן/כחול
+const ACCENT      = "#159BC4";
+const ACCENT_DARK = "#1A5FA0";
+const BG    = "#EEF4F8";
+const INK   = "#15324A";
+const INK2  = "#5B7186";
+const INK3  = "#7B93A8";
+const MUTED = "#9DB0BF";
+const LINE  = "rgba(21,95,160,.08)";
+const LINE2 = "rgba(21,95,160,.14)";
+const CARD_SHADOW = "0 2px 12px rgba(21,95,160,.07)";
 
-const AGE_FILTERS: { id: AgeFilter; label: string }[] = [
+const MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+const MONTHS_SHORT = ["ינו׳","פבר׳","מרץ","אפר׳","מאי","יוני","יולי","אוג׳","ספט׳","אוק׳","נוב׳","דצמ׳"];
+const DAY_NAMES = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+
+type AgeFilterId = "all" | "family" | "early" | "elementary" | "secondary" | "youth";
+
+const AGE_FILTERS: { id: AgeFilterId; label: string }[] = [
   { id: "all",        label: "הכל" },
-  { id: "education",  label: "מנהל החינוך" } as unknown as { id: AgeFilter; label: string },
-  { id: "youth",      label: "מחלקת הנוער" } as unknown as { id: AgeFilter; label: string },
-  { id: "0-6",        label: "גיל 0–6" },
-  { id: "elementary", label: "כיתות א–ו" },
-  { id: "secondary",  label: "כיתות ז–יב" },
-  { id: "families",   label: "משפחות" },
+  { id: "family",     label: "משפחות" },
+  { id: "early",      label: "גיל הרך" },
+  { id: "elementary", label: "יסודי" },
+  { id: "secondary",  label: "על-יסודי" },
+  { id: "youth",      label: "נוער" },
 ];
 
-// מיפוי חגים לפי חודש
-function getHolidaysForMonth(month: number) {
-  return HOLIDAYS.filter(h => h.month === month);
+const AGE_FILTER_KEYWORDS: Record<Exclude<AgeFilterId, "all">, string[]> = {
+  family:     ["משפחה", "משפחות"],
+  early:      ["גן", "גיל הרך", "0-3", "3-6"],
+  elementary: ["יסודי", "א-ו", "א'", "ב'", "ג'", "ד'", "ה'", "ו'"],
+  secondary:  ["על-יסודי", "תיכון", "חטיבה", "ז-ט", "י-יב", "ז'", "ח'", "ט'", "י'", "יא", "יב"],
+  youth:      ["נוער", "מדריכים", "תנועה"],
+};
+
+function matchesAgeFilter(ageGroups: string[], filter: AgeFilterId): boolean {
+  if (filter === "all") return true;
+  if (ageGroups.length === 0) return false;
+  const keywords = AGE_FILTER_KEYWORDS[filter];
+  return ageGroups.some(g => keywords.some(k => g.includes(k)));
 }
 
-const iconBtnStyle: React.CSSProperties = {
-  padding: "8px 14px", fontSize: 12, fontWeight: 500,
-  borderRadius: 10, border: "0.5px solid var(--border)",
-  background: "#fff", cursor: "pointer",
+// שנת הלימודים הפעילה (תשפ״ו) — נופלים אליה כשאין start_year/end_year
+function defaultYearForMonth(month: number): number { return month >= 9 ? 2025 : 2026; }
+
+function startOfDay(ts: number): number { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function addDays(ts: number, n: number): number { const d = new Date(ts); d.setDate(d.getDate() + n); return d.getTime(); }
+function weekStartOf(ts: number): number { const d = new Date(startOfDay(ts)); d.setDate(d.getDate() - d.getDay()); return d.getTime(); }
+function dateTs(year: number, month: number, day: number): number { return new Date(year, month - 1, day).setHours(0, 0, 0, 0); }
+function fmtFullDate(ts: number): string { const d = new Date(ts); return `${d.getDate()} ב${MONTHS[d.getMonth()]} ${d.getFullYear()}`; }
+
+function weekRangeLabel(startTs: number, endTs: number): string {
+  const a = new Date(startTs), b = new Date(endTs);
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) {
+    return `${a.getDate()}–${b.getDate()} ב${MONTHS[a.getMonth()]} ${a.getFullYear()}`;
+  }
+  if (a.getFullYear() === b.getFullYear()) {
+    return `${a.getDate()} ב${MONTHS_SHORT[a.getMonth()]} – ${b.getDate()} ב${MONTHS_SHORT[b.getMonth()]} ${a.getFullYear()}`;
+  }
+  return `${a.getDate()} ב${MONTHS_SHORT[a.getMonth()]} ${a.getFullYear()} – ${b.getDate()} ב${MONTHS_SHORT[b.getMonth()]} ${b.getFullYear()}`;
+}
+
+type WeekEvent = {
+  id: string; name: string; description: string | null;
+  catName: string; catColor: string;
+  location: string | null; ageGroups: string[]; imageUrl: string | null;
+  startTs: number; endTs: number;
+  startTime: string | null; endTime: string | null;
+  startYear: number; startMonth: number; startDay: number;
+  endYear: number; endMonth: number; endDay: number;
+};
+
+const chipStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 5,
+  fontSize: 12, fontWeight: 500, color: INK2,
+  background: "#F2F6FA", padding: "4px 9px", borderRadius: 8,
+};
+
+const navBtnStyle: React.CSSProperties = {
+  width: 42, height: 42, flexShrink: 0, borderRadius: 12,
+  border: `1px solid ${LINE2}`, background: "#F4F8FB", color: ACCENT_DARK,
+  fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center",
+  justifyContent: "center", fontFamily: "inherit",
+};
+
+const waButtonStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 6,
-  fontFamily: "inherit",
+  padding: "9px 15px", fontSize: 13, fontWeight: 600, borderRadius: 10,
+  border: "none", cursor: "pointer", fontFamily: "inherit",
+  background: "#25D366", color: "#fff",
+};
+
+const gcalButtonStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "9px 15px", fontSize: 13, fontWeight: 600, borderRadius: 10,
+  border: `1px solid ${LINE2}`, cursor: "pointer", fontFamily: "inherit",
+  background: "#fff", color: ACCENT_DARK,
+};
+
+const lineClamp2: React.CSSProperties = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
 };
 
 export default function LuachPage() {
-  const { toast } = useToast();
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState<DeptFilter>("all");
-  const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
-  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
-  const [view, setView] = useState<"annual" | "monthly">("annual");
+  const [ageFilter, setAgeFilter] = useState<AgeFilterId>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [hasProfile, setHasProfile] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [anchor, setAnchor] = useState<number>(() => weekStartOf(Date.now()));
+  const [todayTs] = useState<number>(() => startOfDay(Date.now()));
 
   useEffect(() => {
     // Quick local check first for snappy UX, then verify against Supabase.
@@ -62,8 +136,9 @@ export default function LuachPage() {
       const p = await fetchProfile();
       setHasProfile(!!p);
     })();
-    getEvents().then(setDbEvents);
-    getCategories().then(setDbCategories);
+    Promise.all([getEvents(), getCategories()]).then(([evs, cats]) => {
+      setDbEvents(evs); setDbCategories(cats); setLoading(false);
+    });
     const channel = supabase
       .channel("luach-events")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
@@ -73,124 +148,128 @@ export default function LuachPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // המרת אירועי DB לפורמט תצוגה אחיד — צבע ישירות מ-DB, תמיכה במולטי-תחום
-  type CatDeptVal = "education" | "youth" | "both";
-  type ViewEv = {
-    id: string; name: string;
-    catName: string; catColor: string; catDept: CatDeptVal;
-    catNames: string[]; catDepts: CatDeptVal[];
-    startMonth: number; endMonth: number;
-    startDay: number | null; endDay: number | null;
-    startTime: string | null; endTime: string | null;
-    location: string | null; responsible: string | null;
-    ageGroups: string[]; status: string;
-  };
-
-  function localCatByName(name: string, dept?: string) {
-    return CATEGORIES.find(c => c.name === name && (!dept || c.department === dept));
-  }
-
-  const allViewEvents: ViewEv[] = useMemo(() => {
+  // המרת אירועי DB (או DEMO_EVENTS כ-fallback) לפורמט תצוגה שבועית
+  const allWeekEvents: WeekEvent[] = useMemo(() => {
     if (dbEvents.length > 0) {
       return dbEvents.map(e => {
         const ids = (e.category_ids && e.category_ids.length > 0)
           ? e.category_ids
           : (e.category_id ? [e.category_id] : []);
-        const allCats = ids
-          .map(id => dbCategories.find(c => c.id === id))
-          .filter((c): c is DbCategory => !!c);
-        const primary = allCats[0] || (e.categories as DbCategory | undefined);
-        const dbDept = (primary?.department as CatDeptVal) || "education";
-        const dbColor = primary?.color;
-        const local   = !dbColor ? localCatByName(primary?.name || "", dbDept) : null;
+        const primaryCat = ids.map(id => dbCategories.find(c => c.id === id)).find((c): c is DbCategory => !!c)
+          || (e.categories as DbCategory | undefined);
+        const startYear = e.start_year ?? defaultYearForMonth(e.start_month);
+        const endYear   = e.end_year   ?? defaultYearForMonth(e.end_month);
+        const startDay  = e.start_day ?? 1;
+        const endDay    = e.end_day   ?? startDay;
         return {
-          id: e.id, name: e.name,
-          catName: primary?.name || "ללא תחום",
-          catColor: dbColor || local?.color || "#888",
-          catDept: dbDept,
-          catNames: allCats.length > 0 ? allCats.map(c => c.name) : [primary?.name || ""].filter(Boolean),
-          catDepts: allCats.length > 0 ? allCats.map(c => c.department as CatDeptVal) : [dbDept],
-          startMonth: e.start_month, endMonth: e.end_month,
-          startDay: e.start_day, endDay: e.end_day,
+          id: e.id, name: e.name, description: e.description,
+          catName: primaryCat?.name || "כללי", catColor: primaryCat?.color || "#888",
+          location: e.location, ageGroups: e.age_groups || [], imageUrl: e.image_url,
+          startTs: dateTs(startYear, e.start_month, startDay),
+          endTs:   dateTs(endYear,   e.end_month,   endDay),
           startTime: e.start_time, endTime: e.end_time,
-          location: e.location, responsible: e.responsible,
-          ageGroups: e.age_groups || [], status: e.status,
+          startYear, startMonth: e.start_month, startDay,
+          endYear,   endMonth: e.end_month,     endDay,
         };
       });
     }
-    // fallback: DEMO_EVENTS
     return DEMO_EVENTS.map(e => {
       const cat = CATEGORIES.find(c => c.id === e.categoryId);
-      const dept = (cat?.department || "education") as CatDeptVal;
+      const startYear = defaultYearForMonth(e.startMonth);
+      const endYear   = defaultYearForMonth(e.endMonth);
+      const startDay  = e.startDay ?? 1;
+      const endDay    = e.endDay   ?? startDay;
       return {
-        id: e.id, name: e.name,
-        catName: cat?.name || "ללא", catColor: cat?.color || "#888",
-        catDept: dept,
-        catNames: cat ? [cat.name] : [],
-        catDepts: cat ? [dept] : [],
-        startMonth: e.startMonth, endMonth: e.endMonth,
-        startDay: e.startDay ?? null, endDay: e.endDay ?? null,
+        id: e.id, name: e.name, description: null,
+        catName: cat?.name || "כללי", catColor: cat?.color || "#888",
+        location: e.location ?? null, ageGroups: e.ageGroups, imageUrl: null,
+        startTs: dateTs(startYear, e.startMonth, startDay),
+        endTs:   dateTs(endYear,   e.endMonth,   endDay),
         startTime: null, endTime: null,
-        location: e.location ?? null, responsible: e.responsible ?? null,
-        ageGroups: e.ageGroups, status: e.status,
+        startYear, startMonth: e.startMonth, startDay,
+        endYear,   endMonth: e.endMonth,     endDay,
       };
     });
   }, [dbEvents, dbCategories]);
 
-  const educationCats = CATEGORIES.filter(c => c.department === "education");
-  const youthCats     = CATEGORIES.filter(c => c.department === "youth");
+  const filteredEvents = useMemo(
+    () => allWeekEvents.filter(e => matchesAgeFilter(e.ageGroups, ageFilter)),
+    [allWeekEvents, ageFilter]
+  );
 
-  const visibleCategories = useMemo(() => {
-    if (deptFilter === "education") return educationCats;
-    if (deptFilter === "youth")     return youthCats;
-    return [...educationCats, ...youthCats];
-  }, [deptFilter]);
+  const weekStart = anchor;
+  const weekEnd = addDays(anchor, 6);
 
-  const filteredEvents = useMemo(() => {
-    return allViewEvents.filter(e => {
-      if (e.status !== "published") return false;
-      // 'both' מציג גם בסינון חינוך וגם בנוער
-      if (deptFilter !== "all" && e.catDept !== deptFilter && e.catDept !== "both") return false;
-      if (search && !e.name.includes(search)) return false;
-      return true;
-    });
-  }, [allViewEvents, deptFilter, search]);
+  const days = useMemo(() => {
+    const result: { dayTs: number; isToday: boolean; events: WeekEvent[] }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dayTs = addDays(weekStart, i);
+      const dayEvents = filteredEvents
+        .filter(e => dayTs >= e.startTs && dayTs <= e.endTs && dayTs === Math.max(e.startTs, weekStart))
+        .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+      if (dayEvents.length === 0) continue;
+      result.push({ dayTs, isToday: dayTs === todayTs, events: dayEvents });
+    }
+    return result;
+  }, [weekStart, filteredEvents, todayTs]);
 
-  const selectedEventData = selectedEvent
-    ? allViewEvents.find(e => e.id === selectedEvent)
-    : null;
+  const totalCount = days.reduce((sum, d) => sum + d.events.length, 0);
+  const isEmpty = totalCount === 0;
 
-  const DAYS_IN_MONTH: Record<number, number> = {
-    1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
-    7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
-  };
-  const MIN_EVENT_WIDTH = 5; // רוחב מינימלי לאירוע (% של רוחב הגאנט) — לקריאות טקסט
+  const nextEventStart = useMemo(() => {
+    const future = filteredEvents.filter(e => e.startTs > weekEnd).map(e => e.startTs);
+    return future.length > 0 ? Math.min(...future) : null;
+  }, [filteredEvents, weekEnd]);
 
-  // מיקום אירוע בגאנט ברמת היום
-  function eventStyle(
-    startMonth: number,
-    endMonth: number,
-    color: string,
-    startDay?: number | null,
-    endDay?: number | null,
-  ) {
-    const startIdx = SCHOOL_YEAR_MONTHS.indexOf(startMonth);
-    let endIdx     = SCHOOL_YEAR_MONTHS.indexOf(endMonth);
-    if (startIdx < 0 || endIdx < 0) return null;
-    if (endIdx < startIdx) endIdx = 11;
-    const monthW = 100 / 12;
-    const sDays  = DAYS_IN_MONTH[startMonth] || 30;
-    const eDays  = DAYS_IN_MONTH[endMonth] || 30;
-    const startOffset = startDay ? Math.max(0, (startDay - 1) / sDays) : 0;
-    const endOffset   = endDay   ? Math.min(1,  endDay      / eDays)   : 1;
-    const left  = (startIdx + startOffset) * monthW;
-    const right = (endIdx   + endOffset)   * monthW;
-    const width = Math.max(right - left, MIN_EVENT_WIDTH);
-    return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
+  function jumpToNext() {
+    if (nextEventStart !== null) setAnchor(weekStartOf(nextEventStart));
   }
 
+  function eventTimeLabel(e: WeekEvent): string {
+    if (e.endTs > e.startTs) return weekRangeLabel(e.startTs, e.endTs);
+    if (e.startTime) {
+      const start = e.startTime.slice(0, 5);
+      const end = e.endTime ? e.endTime.slice(0, 5) : null;
+      return end && end !== start ? `${start}–${end}` : start;
+    }
+    return "כל היום";
+  }
+
+  function handleShare(e: WeekEvent) {
+    const when = e.endTs > e.startTs
+      ? `${fmtFullDate(e.startTs)} – ${fmtFullDate(e.endTs)}`
+      : `${fmtFullDate(e.startTs)}${e.startTime ? ` · ${e.startTime.slice(0, 5)}` : ""}`;
+    const text = `🗓️ ${e.name}\n📅 ${when}${e.location ? `\n📍 ${e.location}` : ""}${e.description ? `\n\n${e.description}` : ""}\n\nמתוך לוח האירועים של עיריית אופקים`;
+    shareWhatsapp(text);
+  }
+
+  function handleGcal(e: WeekEvent) {
+    addToGoogleCalendar({
+      title: e.name,
+      description: e.description ?? undefined,
+      location: e.location ?? undefined,
+      startYear: e.startYear, startMonth: e.startMonth, startDay: e.startDay,
+      endYear: e.endYear, endMonth: e.endMonth, endDay: e.endDay,
+    });
+  }
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: BG }}>
+      <div style={{ background: "var(--parent-primary)", height: 52 }} />
+      <div style={{ padding: "18px 14px", maxWidth: 820, margin: "0 auto", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="skeleton" style={{ height: 110, borderRadius: 18 }} />
+        {[1,2,3].map(i => (
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div className="skeleton" style={{ height: 22, width: 160, borderRadius: 8 }} />
+            <div className="skeleton" style={{ height: 88, borderRadius: 14 }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--paper)" }}>
+    <div style={{ minHeight: "100vh", background: BG }}>
       <TopBar
         variant="parent"
         title="לוח קהילתי"
@@ -206,15 +285,19 @@ export default function LuachPage() {
           </Link>
         }
       />
-      <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ background: "#fff", padding: 20, borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+
+      <div dir="rtl" style={{
+        fontFamily: "var(--font, 'Heebo', system-ui, sans-serif)",
+        padding: "18px 14px 40px", maxWidth: 820, margin: "0 auto",
+        display: "flex", flexDirection: "column", gap: 14, color: INK,
+      }}>
 
         {/* באנר אונבורדינג */}
         {!hasProfile && (
           <div style={{
             background: "linear-gradient(135deg, #FFF8EE 0%, #FAECE7 100%)",
-            border: "0.5px solid #F5C57E", borderRadius: "var(--radius-md)",
-            padding: "12px 16px", marginBottom: "1rem",
+            border: "0.5px solid #F5C57E", borderRadius: 16,
+            padding: "12px 16px",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             gap: 12, flexWrap: "wrap",
           }}>
@@ -232,7 +315,7 @@ export default function LuachPage() {
             <Link href={isAuthed ? "/luach/onboarding" : "/luach/login"} style={{
               padding: "6px 14px", fontSize: 12, fontWeight: 500,
               background: "#7C4A0A", color: "#fff",
-              borderRadius: "var(--radius-md)", textDecoration: "none",
+              borderRadius: 10, textDecoration: "none",
               whiteSpace: "nowrap",
             }}>
               התאמה אישית ←
@@ -240,328 +323,156 @@ export default function LuachPage() {
           </div>
         )}
 
-        {/* סרגל כלים */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem", flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
-            {(["annual", "monthly"] as const).map(v => (
-              <button key={v} onClick={() => setView(v)} style={{
-                background: view === v ? "#fff" : "transparent",
-                border: "none", padding: "6px 14px", fontSize: 13,
-                cursor: "pointer", borderRadius: 6,
-                color: view === v ? "var(--text-primary)" : "var(--text-secondary)",
-                fontWeight: view === v ? 500 : 400,
-                boxShadow: view === v ? "0 0 0 0.5px var(--border)" : "none",
-              }}>
-                {v === "annual" ? "שנתי" : "חודשי"}
-              </button>
-            ))}
-          </div>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="חיפוש אירוע..."
-            style={{
-              flex: 1, minWidth: 180, padding: "7px 12px", fontSize: 13,
-              border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
-              background: "#fff", fontFamily: "inherit", outline: "none",
-            }}
-          />
-        </div>
-
-        {/* פילטרים */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: "1rem" }}>
-          {([
-            { id: "all",       label: "הכל" },
-            { id: "education", label: "מנהל החינוך" },
-            { id: "youth",     label: "מחלקת הנוער" },
-          ] as { id: DeptFilter; label: string }[]).map(f => (
-            <button key={f.id} onClick={() => setDeptFilter(f.id)} style={{
-              padding: "5px 11px", fontSize: 12, borderRadius: 14,
-              border: "0.5px solid var(--border)",
-              background: deptFilter === f.id ? "var(--text-primary)" : "#fff",
-              color:      deptFilter === f.id ? "#fff" : "var(--text-secondary)",
-              cursor: "pointer",
-            }}>
-              {f.label}
-            </button>
-          ))}
-          {([
-            { id: "0-6",        label: "גיל 0–6" },
-            { id: "elementary", label: "כיתות א–ו" },
-            { id: "secondary",  label: "כיתות ז–יב" },
-          ] as { id: AgeFilter; label: string }[]).map(f => (
-            <button key={f.id} onClick={() => setAgeFilter(ageFilter === f.id ? "all" : f.id)} style={{
-              padding: "5px 11px", fontSize: 12, borderRadius: 14,
-              border: "0.5px solid var(--border)",
-              background: ageFilter === f.id ? "var(--parent-primary)" : "#fff",
-              color:      ageFilter === f.id ? "#fff" : "var(--text-secondary)",
-              cursor: "pointer",
-            }}>
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* מקרא */}
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: "0.75rem", fontSize: 11, color: "var(--text-tertiary)" }}>
-          {visibleCategories.map(cat => (
-            <span key={cat.id} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, display: "inline-block" }} />
-              {cat.name}
-            </span>
-          ))}
-        </div>
-
-        {/* תצוגה חודשית */}
-        {view === "monthly" && (
-          <MonthlyView
-            events={filteredEvents.map(e => ({
-              id: e.id, name: e.name,
-              categoryId: e.catName,
-              startMonth: e.startMonth, endMonth: e.endMonth,
-              startDay: e.startDay, endDay: e.endDay,
-              color: e.catColor,
-              ageGroups: e.ageGroups, location: e.location,
-            }))}
-            onEventClick={id => setSelectedEvent(id)}
-            primaryColor="var(--parent-primary)"
-          />
-        )}
-
-        {/* גאנט שנתי */}
-        {view === "annual" && (
-        <div className="gantt-scroll-x" style={{ border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
-        <div style={{ minWidth: 800 }}>
-          {/* כותרת חודשים */}
-          <div style={{ display: "grid", gridTemplateColumns: "110px repeat(12, 1fr)", borderBottom: "0.5px solid var(--border)", background: "var(--bg-secondary)" }}>
-            <div style={{ padding: "8px 12px", fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }} />
-            {SCHOOL_YEAR_MONTHS.map((m, i) => (
-              <div key={m} style={{
-                padding: "8px 4px", textAlign: "center", fontSize: 11,
-                fontWeight: 500, color: "var(--text-secondary)",
-                borderRight: i < 11 ? "0.5px solid var(--border)" : "none",
-              }}>
-                {MONTHS_HE[i]}
+        {/* ניווט שבועי + סינון */}
+        <div style={{ background: "#fff", borderRadius: 18, padding: "14px 16px", boxShadow: CARD_SHADOW, border: `1px solid ${LINE}` }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <button onClick={() => setAnchor(a => addDays(a, -7))} aria-label="שבוע קודם" style={navBtnStyle}>›</button>
+            <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: INK, letterSpacing: "-.2px" }}>
+                {weekRangeLabel(weekStart, weekEnd)}
               </div>
-            ))}
+              <div style={{ fontSize: 12.5, fontWeight: 500, color: ACCENT, marginTop: 1 }}>
+                {totalCount === 0 ? "אין אירועים השבוע" : totalCount === 1 ? "אירוע אחד השבוע" : `${totalCount} אירועים השבוע`}
+              </div>
+            </div>
+            <button onClick={() => setAnchor(a => addDays(a, 7))} aria-label="שבוע הבא" style={navBtnStyle}>‹</button>
           </div>
 
-          {/* שורת חגים */}
-          <div style={{ display: "grid", gridTemplateColumns: "110px repeat(12, 1fr)", borderBottom: "0.5px solid var(--border)", minHeight: 28, background: "#FFFDF5" }}>
-            <div style={{ padding: "6px 12px", fontSize: 10, fontWeight: 500, color: "#BA7517" }}>
-              חגים ומועדים
-            </div>
-            <div style={{ gridColumn: "2 / -1", display: "grid", gridTemplateColumns: "repeat(12, 1fr)", position: "relative" }}>
-              {SCHOOL_YEAR_MONTHS.map((m, i) => {
-                const holidays = getHolidaysForMonth(m);
-                return (
-                  <div key={m} style={{ borderRight: i < 11 ? "0.5px solid var(--border)" : "none", padding: "4px 3px", display: "flex", flexWrap: "wrap", gap: 2 }}>
-                    {holidays.map(h => (
-                      <span key={h.name} title={h.name} style={{
-                        fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                        background: h.type === "vacation" ? "#FEF3C7" : h.type === "memorial" ? "#F3F4F6" : "#FDE68A",
-                        color: h.type === "vacation" ? "#92400E" : h.type === "memorial" ? "#374151" : "#78350F",
-                        whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis",
-                      }}>
-                        {h.name}
-                      </span>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* שורות קטגוריות */}
-          {visibleCategories.map(cat => {
-            // אירוע מופיע גם אם הוא משויך ל-cat הזה ישירות, וגם אם משויך לתחום משותף ('both')
-            const catEvents = filteredEvents.filter(e =>
-              e.catNames.includes(cat.name) &&
-              (e.catDepts.includes(cat.department) || e.catDepts.includes("both"))
-            );
-            // הקצאת lanes כדי שאירועים חופפים יוצגו זה מעל זה
-            const sorted = [...catEvents].sort((a, b) => {
-              const am = SCHOOL_YEAR_MONTHS.indexOf(a.startMonth);
-              const bm = SCHOOL_YEAR_MONTHS.indexOf(b.startMonth);
-              if (am !== bm) return am - bm;
-              return (a.startDay || 1) - (b.startDay || 1);
-            });
-            // גבולות ויזואליים (% של רוחב הגאנט) כולל מינימום-רוחב
-            const monthW = 100 / 12;
-            const boundsOf = (ev: typeof catEvents[number]) => {
-              const sIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.startMonth);
-              let   eIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.endMonth);
-              if (sIdx < 0 || eIdx < 0) return { start: 0, end: MIN_EVENT_WIDTH };
-              if (eIdx < sIdx) eIdx = 11;
-              const sDays = DAYS_IN_MONTH[ev.startMonth] || 30;
-              const eDays = DAYS_IN_MONTH[ev.endMonth]   || 30;
-              const sOff = ev.startDay ? Math.max(0, (ev.startDay - 1) / sDays) : 0;
-              const eOff = ev.endDay   ? Math.min(1,  ev.endDay      / eDays)   : 1;
-              const start   = (sIdx + sOff) * monthW;
-              const realEnd = (eIdx + eOff) * monthW;
-              return { start, end: start + Math.max(realEnd - start, MIN_EVENT_WIDTH) };
-            };
-            const lanes: number[] = [];
-            const laned: { ev: typeof catEvents[number]; lane: number }[] = [];
-            for (const ev of sorted) {
-              const { start: sKey, end: eKey } = boundsOf(ev);
-              let lane = lanes.findIndex(end => end <= sKey);
-              if (lane === -1) { lane = lanes.length; lanes.push(eKey); }
-              else lanes[lane] = eKey;
-              laned.push({ ev, lane });
-            }
-            const laneCount = Math.max(1, lanes.length);
-            const rowHeight = Math.max(42, 10 + laneCount * 26);
-            return (
-              <div key={cat.id} style={{
-                display: "grid", gridTemplateColumns: "110px repeat(12, 1fr)",
-                borderBottom: "0.5px solid var(--border)", minHeight: rowHeight,
-                transition: "background 0.1s",
-              }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-secondary)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "")}
-              >
-                {/* שם קטגוריה */}
-                <div style={{
-                  padding: "0 12px", fontSize: 12, fontWeight: 500,
-                  color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6,
-                  borderLeft: "0.5px solid var(--border)",
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 14, paddingTop: 13, borderTop: `1px solid ${LINE}` }}>
+            {AGE_FILTERS.map(f => {
+              const active = ageFilter === f.id;
+              return (
+                <button key={f.id} onClick={() => { setAgeFilter(f.id); setExpandedId(null); }} style={{
+                  padding: "7px 14px", fontSize: 13, fontWeight: 600, borderRadius: 999,
+                  cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${active ? ACCENT : LINE2}`,
+                  background: active ? ACCENT : "#fff",
+                  color: active ? "#fff" : ACCENT_DARK,
+                  transition: "all .15s",
                 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, flexShrink: 0 }} />
-                  {cat.name}
-                </div>
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-                {/* תאי חודשים + אירועים */}
-                <div style={{ gridColumn: "2 / -1", display: "grid", gridTemplateColumns: "repeat(12, 1fr)", position: "relative" }}>
-                  {SCHOOL_YEAR_MONTHS.map((_, i) => (
-                    <div key={i} style={{ borderRight: i < 11 ? "0.5px solid var(--border)" : "none" }} />
-                  ))}
-                  {laned.map(({ ev, lane }) => {
-                    const style = eventStyle(ev.startMonth, ev.endMonth, cat.color, ev.startDay, ev.endDay);
-                    if (!style) return null;
-                    const top = 6 + lane * 26;
-                    return (
-                      <button
-                        key={ev.id}
-                        onClick={() => setSelectedEvent(selectedEvent === ev.id ? null : ev.id)}
-                        title={`${ev.name}${ev.startDay ? ` · ${ev.startDay}/${ev.startMonth}` : ""}${ev.endDay && (ev.endDay !== ev.startDay || ev.endMonth !== ev.startMonth) ? `–${ev.endDay}/${ev.endMonth}` : ""}`}
-                        style={{
-                          position: "absolute", top, height: 22,
-                          borderRadius: 4, padding: "2px 6px",
-                          fontSize: 10, fontWeight: 500,
-                          cursor: "pointer", whiteSpace: "nowrap",
-                          overflow: "hidden", textOverflow: "ellipsis",
-                          border: "none", color: "#fff",
-                          transition: "transform 0.1s, opacity 0.1s",
-                          opacity: selectedEvent && selectedEvent !== ev.id ? 0.6 : 1,
-                          ...style,
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1.5px)")}
-                        onMouseLeave={e => (e.currentTarget.style.transform = "")}
-                      >
-                        {ev.name}
-                      </button>
-                    );
-                  })}
-                </div>
+        {/* ימי השבוע עם אירועים */}
+        {days.map(day => (
+          <div key={day.dayTs} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 4px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
+                <span style={{ fontSize: 16, fontWeight: 800, color: INK }}>
+                  יום {DAY_NAMES[new Date(day.dayTs).getDay()]}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: INK3 }}>
+                  {new Date(day.dayTs).getDate()} ב{MONTHS[new Date(day.dayTs).getMonth()]}
+                </span>
               </div>
-            );
-          })}
-        </div>
-        </div>
-        )}
+              {day.isToday && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: ACCENT, padding: "2px 9px", borderRadius: 999 }}>
+                  היום
+                </span>
+              )}
+              <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${LINE2}, transparent)` }} />
+            </div>
 
-        {/* חלון פרטי אירוע */}
-        {selectedEventData && (
-          <div style={{
-            marginTop: 16, padding: "1.25rem 1.5rem",
-            background: "#fff", border: `1.5px solid ${selectedEventData.catColor}`,
-            borderRadius: "var(--radius-lg)", position: "relative",
-          }}>
-            <button
-              onClick={() => setSelectedEvent(null)}
-              style={{
-                position: "absolute", left: 12, top: 12,
-                width: 28, height: 28, border: "none",
-                background: "var(--bg-secondary)", borderRadius: "50%",
-                cursor: "pointer", fontSize: 16, display: "flex",
-                alignItems: "center", justifyContent: "center",
-              }}
-            >×</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: selectedEventData.catColor, flexShrink: 0 }} />
-              <h2 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--text-primary)" }}>
-                {selectedEventData.name}
-              </h2>
+            {day.events.map(ev => {
+              const expanded = expandedId === ev.id;
+              return (
+                <div
+                  key={ev.id}
+                  onClick={() => setExpandedId(expanded ? null : ev.id)}
+                  style={{
+                    display: "flex", background: "#fff", borderRadius: 14, overflow: "hidden",
+                    cursor: "pointer", boxShadow: CARD_SHADOW, border: `1px solid ${LINE}`,
+                  }}
+                >
+                  <div style={{ width: 6, flexShrink: 0, background: ev.catColor }} />
+                  <div style={{ flex: 1, minWidth: 0, padding: "14px 15px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        {ev.imageUrl && !expanded && (
+                          <img src={ev.imageUrl} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                        )}
+                        <div style={{ fontSize: 16, fontWeight: 700, color: INK, lineHeight: 1.3 }}>{ev.name}</div>
+                      </div>
+                      <div style={{
+                        flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: ev.catColor,
+                        background: ev.catColor + "1A", padding: "4px 10px", borderRadius: 9, whiteSpace: "nowrap",
+                      }}>
+                        {eventTimeLabel(ev)}
+                      </div>
+                    </div>
+
+                    {ev.description && (
+                      <div style={{ fontSize: 13.5, fontWeight: 400, color: INK2, lineHeight: 1.55, marginTop: 6, ...(expanded ? {} : lineClamp2) }}>
+                        {ev.description}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 11 }}>
+                      {ev.location && <span style={chipStyle}>📍 {ev.location}</span>}
+                      {ev.ageGroups.length > 0 && <span style={chipStyle}>👥 {ev.ageGroups.join(", ")}</span>}
+                      <span style={{ ...chipStyle, color: ev.catColor, background: ev.catColor + "1A", fontWeight: 600 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 2, background: ev.catColor, display: "inline-block" }} />
+                        {ev.catName}
+                      </span>
+                    </div>
+
+                    {!expanded && (
+                      <div style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, marginTop: 9 }}>
+                        לחצו לפרטים ולהסבר מלא ‹
+                      </div>
+                    )}
+
+                    {expanded && (
+                      <div style={{ marginTop: 13, paddingTop: 13, borderTop: `1px solid ${LINE}`, display: "flex", flexDirection: "column", gap: 13 }}>
+                        {ev.imageUrl && (
+                          <img src={ev.imageUrl} alt={ev.name} style={{ width: "100%", maxHeight: 320, objectFit: "cover", borderRadius: 12, display: "block" }} />
+                        )}
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button onClick={e2 => { e2.stopPropagation(); handleShare(ev); }} style={waButtonStyle}>
+                            📲 שיתוף בוואטסאפ
+                          </button>
+                          <button onClick={e2 => { e2.stopPropagation(); handleGcal(ev); }} style={gcalButtonStyle}>
+                            📅 הוספה ליומן
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        {/* מצב ריק */}
+        {isEmpty && (
+          <div style={{ background: "#fff", borderRadius: 18, padding: "40px 24px", textAlign: "center", boxShadow: CARD_SHADOW, border: `1px solid ${LINE}` }}>
+            <div style={{ fontSize: 40 }}>🗓️</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: INK, marginTop: 10 }}>אין אירועים בשבוע זה</div>
+            <div style={{ fontSize: 13.5, color: INK3, marginTop: 4 }}>
+              {nextEventStart !== null ? "נסו לדפדף קדימה או לשנות סינון" : "בחרו סינון אחר כדי לראות אירועים"}
             </div>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 13, color: "var(--text-secondary)" }}>
-              <span>📅 {selectedEventData.startDay ? `${selectedEventData.startDay} ` : ""}{MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}
-                {(selectedEventData.endMonth !== selectedEventData.startMonth || (selectedEventData.endDay && selectedEventData.endDay !== selectedEventData.startDay))
-                  ? ` – ${selectedEventData.endDay ? `${selectedEventData.endDay} ` : ""}${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.endMonth)]}` : ""}
-              </span>
-              {selectedEventData.location && <span>📍 {selectedEventData.location}</span>}
-              {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
-              {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
-              <span style={{ padding: "2px 8px", borderRadius: 10, background: selectedEventData.catColor + "22", color: selectedEventData.catColor, fontWeight: 500 }}>
-                {selectedEventData.catName}
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-              <button onClick={() => {
-                shareWhatsapp(`🗓 ${selectedEventData.name}\n📅 ${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.startMonth)]}${selectedEventData.location ? `\n📍 ${selectedEventData.location}` : ""}\n\nמתוך לוח אופקים`);
-              }} style={iconBtnStyle}>
-                📤 וואטסאפ
+            {nextEventStart !== null && (
+              <button onClick={jumpToNext} style={{
+                marginTop: 16, padding: "10px 20px", fontSize: 14, fontWeight: 600, borderRadius: 11,
+                border: "none", cursor: "pointer", fontFamily: "inherit", background: ACCENT, color: "#fff",
+              }}>
+                לשבוע הבא עם אירועים ←
               </button>
-              <button onClick={() => {
-                const year = selectedEventData.startMonth >= 9 ? 2025 : 2026;
-                addToGoogleCalendar({
-                  title: selectedEventData.name,
-                  location: selectedEventData.location ?? undefined,
-                  startYear: year,
-                  startMonth: selectedEventData.startMonth,
-                  startDay: selectedEventData.startDay ?? 1,
-                  endYear: selectedEventData.endMonth >= 9 ? 2025 : 2026,
-                  endMonth: selectedEventData.endMonth,
-                  endDay: selectedEventData.endDay ?? selectedEventData.startDay ?? 1,
-                });
-              }} style={iconBtnStyle}>
-                📆 Google
-              </button>
-              <button onClick={() => {
-                const year = selectedEventData.startMonth >= 9 ? 2025 : 2026;
-                const ical = generateICal([{
-                  uid: selectedEventData.id,
-                  title: selectedEventData.name,
-                  location: selectedEventData.location ?? undefined,
-                  startYear: year, startMonth: selectedEventData.startMonth, startDay: selectedEventData.startDay ?? 1,
-                  endYear: selectedEventData.endMonth >= 9 ? 2025 : 2026,
-                  endMonth: selectedEventData.endMonth,
-                  endDay: selectedEventData.endDay ?? selectedEventData.startDay ?? 1,
-                }]);
-                downloadICal(`event-${selectedEventData.name}`, ical);
-                toast("הקובץ ירד! פתח אותו והאירוע יתווסף ליומן שלך 📆", "success");
-              }} style={iconBtnStyle}>
-                📥 iCal
-              </button>
-            </div>
+            )}
           </div>
         )}
 
-        {/* footer */}
-        <div style={{
-          marginTop: 16, padding: "0.75rem 1rem",
-          background: "var(--bg-secondary)", borderRadius: "var(--radius-md)",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          fontSize: 11, color: "var(--text-tertiary)", flexWrap: "wrap", gap: 8,
-        }}>
-          <span>מציג {filteredEvents.length} אירועים · עיריית אופקים תשפ״ו</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/" style={{ fontSize: 11, color: "var(--text-tertiary)", textDecoration: "none" }}>
-              ← כניסת עובדים
-            </Link>
-          </div>
+        {/* כותרת תחתונה */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: 6, fontSize: 12, fontWeight: 500, color: "#93A6B7" }}>
+          <span>לוח האירועים העירוני · אופקים · תשפ״ו</span>
+          <span>·</span>
+          <Link href="/" style={{ color: "#93A6B7", textDecoration: "none" }}>כניסת עובדים</Link>
         </div>
-      </div>
       </div>
     </div>
   );
