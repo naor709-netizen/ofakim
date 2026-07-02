@@ -694,7 +694,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             </div>
           </div>
 
-          <div className="gantt-desktop-only" style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
+          <div style={{ display: "inline-flex", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", padding: 3 }}>
             {([{ id: "annual", label: "שנתי" }, { id: "monthly", label: "חודשי" }] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)} style={{
                 background: view === v.id ? "#fff" : "transparent",
@@ -854,7 +854,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
         {/* גאנט שנתי */}
         {view === "annual" && (
-        <div className="gantt-scroll-x" style={{ border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", border: "0.5px solid var(--border)", borderRadius: "var(--radius-lg)", marginBottom: 16 }}>
         <div style={{ minWidth: 900 }}>
 
           {/* כותרת חודשים */}
