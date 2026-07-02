@@ -61,6 +61,8 @@ export default function MonthlyView({
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(initialMonth ?? today.getMonth() + 1);
   const [currentYear, setCurrentYear]   = useState(initialYear  ?? today.getFullYear());
+  // יום שנפתח בחלון "כל האירועים" (כשיש יותר מדי אירועים ביום אחד)
+  const [dayModal, setDayModal] = useState<number | null>(null);
 
   // עדכון אם props משתנים
   useEffect(() => {
@@ -312,15 +314,76 @@ export default function MonthlyView({
                   </button>
                 ))}
                 {dayEvents.length > 3 && (
-                  <span style={{ fontSize: 9, color: "var(--text-tertiary)", paddingRight: 4 }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); setDayModal(cell.day); }}
+                    style={{
+                      fontSize: 9, fontWeight: 600, color: primaryColor,
+                      paddingRight: 4, background: "none", border: "none",
+                      cursor: "pointer", textAlign: "right", fontFamily: "inherit",
+                    }}
+                  >
                     +{dayEvents.length - 3} עוד
-                  </span>
+                  </button>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* חלון כל אירועי היום */}
+      {dayModal !== null && (
+        <div
+          onClick={() => setDayModal(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 200, padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: "var(--radius-lg)",
+              padding: "1.25rem", width: "100%", maxWidth: 380,
+              maxHeight: "80vh", overflowY: "auto", position: "relative",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+                {dayModal} ב{monthLabel} · {eventsForDay(dayModal).length} אירועים
+              </h3>
+              <button
+                onClick={() => setDayModal(null)}
+                style={{
+                  width: 28, height: 28, border: "none", background: "var(--bg-secondary)",
+                  borderRadius: "50%", cursor: "pointer", fontSize: 16, flexShrink: 0,
+                }}
+              >×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {eventsForDay(dayModal).map(ev => (
+                <button
+                  key={ev.id}
+                  onClick={() => { onEventClick?.(ev.id); setDayModal(null); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "9px 11px", borderRadius: 8,
+                    background: "var(--bg-secondary)", border: "none",
+                    cursor: "pointer", textAlign: "right", fontFamily: "inherit",
+                    fontSize: 13, color: "var(--text-primary)", width: "100%",
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: ev.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{ev.name}</span>
+                  {ev.location && <span style={{ fontSize: 11, color: "var(--text-tertiary)", flexShrink: 0 }}>📍 {ev.location}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

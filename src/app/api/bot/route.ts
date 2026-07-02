@@ -1,16 +1,30 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { CAMPUSES } from "@/lib/campuses";
 import { MONTHS_HE, SCHOOL_YEAR_MONTHS } from "@/lib/data";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+export const dynamic = "force-dynamic";
 
-const client = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null;
+let _supabase: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+  }
+  return _supabase;
+}
+
+let _anthropic: Anthropic | null | undefined;
+function getAnthropic(): Anthropic | null {
+  if (_anthropic === undefined) {
+    _anthropic = process.env.ANTHROPIC_API_KEY
+      ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      : null;
+  }
+  return _anthropic;
+}
 
 type EventRow = {
   name: string; start_month: number; end_month: number;
@@ -27,9 +41,10 @@ type InfraRow = {
 };
 
 async function loadData() {
+  const sb = getSupabase();
   const [eventsRes, infrastructuresRes] = await Promise.all([
-    supabase.from("events").select("*, categories(name, department)").eq("status", "published").order("start_month"),
-    supabase.from("infrastructures").select("*").eq("active", true),
+    sb.from("events").select("*, categories(name, department)").eq("status", "published").order("start_month"),
+    sb.from("infrastructures").select("*").eq("active", true),
   ]);
   return {
     events: (eventsRes.data ?? []) as EventRow[],
@@ -178,6 +193,7 @@ export async function POST(req: Request) {
   };
 
   const { events, infrastructures } = await loadData();
+  const client = getAnthropic();
 
   // אם אין מפתח Anthropic - השתמש בבוט הפנימי
   if (!client) {

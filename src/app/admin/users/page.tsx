@@ -13,6 +13,7 @@ export default function UsersAdminPage() {
   const [editing, setEditing] = useState<Partial<AppUser> | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [me, setMe] = useState<AppUser | null>(null);
+  const [tab, setTab] = useState<"pending" | "all">("pending");
 
   useEffect(() => {
     const session = loadSession();
@@ -90,27 +91,108 @@ export default function UsersAdminPage() {
         }
       />
 
-      <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 500, margin: "0 0 4px" }}>👥 עובדים מורשים</h1>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>
-              {users.length} עובדים פעילים · רק עובדים מהרשימה הזו יוכלו להתחבר
-            </p>
+      <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
+
+        {/* Hero */}
+        <div style={{
+          background: "linear-gradient(135deg, #185FA5 0%, #7F77DD 50%, #BE185D 100%)",
+          borderRadius: 22, padding: "1.5rem 2rem",
+          marginBottom: 20, position: "relative", overflow: "hidden",
+          color: "#fff",
+        }}>
+          <div style={{ position: "absolute", top: -40, right: -40, width: 180, height: 180, borderRadius: "50%", background: "rgba(255,255,255,0.12)", filter: "blur(40px)" }} />
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, opacity: 0.85, textTransform: "uppercase" }}>
+                👥 STAFF MANAGEMENT
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 700, margin: "6px 0 4px", letterSpacing: -0.3 }}>
+                ניהול עובדים
+              </h1>
+              <p style={{ fontSize: 13, margin: 0, opacity: 0.92 }}>
+                {users.length} עובדים רשומים · {grouped.pending.length > 0 && (
+                  <strong>⏳ {grouped.pending.length} ממתינים לאישור</strong>
+                )}
+              </p>
+            </div>
+            <button onClick={openCreate} style={{
+              padding: "10px 20px", fontSize: 13, fontWeight: 600,
+              background: "rgba(255,255,255,0.95)", color: "#185FA5",
+              border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}>
+              + עובד חדש
+            </button>
           </div>
-          <button onClick={openCreate} style={{
-            padding: "9px 18px", fontSize: 13, fontWeight: 500,
-            background: "#1A1A1A", color: "#fff",
-            border: "none", borderRadius: "var(--radius-md)", cursor: "pointer",
-          }}>
-            + עובד חדש
-          </button>
         </div>
 
-        {loading ? <p>טוען...</p> : (
+        {/* טאבים: ממתינים | הכל */}
+        <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: "1px solid var(--border)" }}>
+          {([
+            { id: "pending", label: "ממתינים לאישור", count: grouped.pending.length, accent: "#7C4A0A" },
+            { id: "all",     label: "כל העובדים",      count: grouped.admin.length + grouped.education.length + grouped.youth.length, accent: "#1A1A1A" },
+          ] as const).map(t => {
+            const active = tab === t.id;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                background: "none", border: "none", padding: "10px 18px", fontSize: 13,
+                cursor: "pointer", fontFamily: "inherit",
+                color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                fontWeight: active ? 600 : 400,
+                borderBottom: active ? `2px solid ${t.accent}` : "2px solid transparent",
+                marginBottom: -1,
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                {t.label}
+                {t.count > 0 && (
+                  <span style={{
+                    fontSize: 10, padding: "1px 7px", borderRadius: 10,
+                    background: t.id === "pending" ? "#F5C57E" : "var(--bg-secondary)",
+                    color: t.id === "pending" ? "#7C4A0A" : "var(--text-secondary)",
+                    fontWeight: 600,
+                  }}>
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {loading ? <p>טוען...</p> : tab === "pending" ? (
+          grouped.pending.length === 0 ? (
+            <div style={{
+              background: "#fff", borderRadius: "var(--radius-lg)",
+              padding: "3rem 1rem", textAlign: "center",
+              border: "0.5px solid var(--border)",
+            }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>✓</div>
+              <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 6px" }}>אין בקשות ממתינות</h3>
+              <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: 0 }}>
+                כשעובד יבקש להירשם, הוא יופיע כאן ותוכל לאשר אותו בלחיצה
+              </p>
+            </div>
+          ) : (
+            <PendingSection list={grouped.pending} onApprove={approveUser} onEdit={openEdit} onDelete={handleDelete} />
+          )
+        ) : (
           <>
             {grouped.pending.length > 0 && (
-              <PendingSection list={grouped.pending} onApprove={approveUser} onEdit={openEdit} onDelete={handleDelete} />
+              <div style={{
+                background: "#FFF8EE", border: "1px solid #F5C57E",
+                borderRadius: "var(--radius-md)", padding: "10px 14px",
+                marginBottom: 16, fontSize: 12, color: "#7C4A0A",
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+              }}>
+                <span>⏳ {grouped.pending.length} משתמשים ממתינים לאישור</span>
+                <button onClick={() => setTab("pending")} style={{
+                  padding: "4px 10px", fontSize: 11, fontWeight: 500,
+                  background: "#7C4A0A", color: "#fff",
+                  border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer",
+                }}>
+                  עבור לתצוגה ←
+                </button>
+              </div>
             )}
             <Section title="🛡 מנהלי-על"  list={grouped.admin}     color="#1A1A1A" onEdit={openEdit} onDelete={handleDelete} />
             <Section title="🔵 מנהל החינוך" list={grouped.education} color="#185FA5" onEdit={openEdit} onDelete={handleDelete} />
@@ -236,32 +318,54 @@ function Section({ title, list, color, onEdit, onDelete }: {
   onEdit: (u: AppUser) => void; onDelete: (id: string) => void;
 }) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 10px", color }}>{title} <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>({list.length})</span></h3>
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{
+          fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 12,
+          background: color + "18", color,
+          display: "inline-flex", alignItems: "center", gap: 6,
+        }}>
+          {title}
+        </span>
+        <span style={{
+          fontSize: 11, padding: "2px 9px", borderRadius: 10,
+          background: "var(--bg-secondary)", color: "var(--text-secondary)",
+          fontWeight: 600,
+        }}>
+          {list.length}
+        </span>
+      </div>
       {list.length === 0 ? (
-        <p style={{ fontSize: 12, color: "var(--text-tertiary)", padding: "12px 14px", background: "#fff", borderRadius: "var(--radius-md)", border: "0.5px solid var(--border)" }}>
-          אין עובדים במחלקה זו
+        <p style={{ fontSize: 12, color: "var(--text-tertiary)", padding: "16px", background: "#fff", borderRadius: 12, border: "0.5px dashed var(--border)", textAlign: "center" }}>
+          אין עובדים במחלקה זו עדיין
         </p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {list.map(u => (
             <div key={u.id} style={{
-              background: "#fff", borderRadius: "var(--radius-md)",
-              padding: "10px 14px", border: "0.5px solid var(--border)",
+              background: "#fff", borderRadius: 14,
+              padding: "12px 16px", border: "1px solid rgba(0,0,0,0.04)",
+              borderLeft: `4px solid ${color}`,
               display: "flex", alignItems: "center", gap: 12,
-            }}>
+              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+              transition: "transform 0.15s, box-shadow 0.15s",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateX(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.06)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.03)"; }}
+            >
               <div style={{
-                width: 34, height: 34, borderRadius: "50%",
-                background: color + "22", color, fontSize: 13, fontWeight: 600,
+                width: 38, height: 38, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${color}22 0%, ${color}44 100%)`,
+                color, fontSize: 14, fontWeight: 700,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0,
+                flexShrink: 0, border: `1px solid ${color}33`,
               }}>{u.full_name[0]}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{u.full_name} {!u.active && <span style={{ fontSize: 10, color: "var(--danger)" }}>(לא פעיל)</span>}</div>
-                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{u.email}</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{u.full_name} {!u.active && <span style={{ fontSize: 10, color: "var(--danger)", fontWeight: 500 }}>(לא פעיל)</span>}</div>
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 1 }}>{u.email}</div>
               </div>
-              <button onClick={() => onEdit(u)} style={smallBtn}>✏️</button>
-              <button onClick={() => onDelete(u.id)} style={{ ...smallBtn, color: "var(--danger)" }}>🗑</button>
+              <button onClick={() => onEdit(u)} style={smallBtn} title="ערוך">✏️</button>
+              <button onClick={() => onDelete(u.id)} style={{ ...smallBtn, color: "var(--danger)" }} title="מחק">🗑</button>
             </div>
           ))}
         </div>

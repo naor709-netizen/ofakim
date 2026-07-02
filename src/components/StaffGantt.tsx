@@ -11,7 +11,9 @@ import BotChat from "@/components/BotChat";
 import MonthlyView from "@/components/MonthlyView";
 import { supabase } from "@/lib/supabase";
 import { getCategories, getEvents, createEvent, updateEvent, deleteEvent, type DbEvent, type DbCategory } from "@/lib/events";
-import { logAudit, getInfrastructures, type Infrastructure } from "@/lib/infrastructure";
+import { logAudit, getInfrastructures, createInfrastructure, type Infrastructure } from "@/lib/infrastructure";
+
+const INFRA_TYPES = ["אולם", "מועדון", "אולם ספורט", "בית ספר", "גן", "מרחב חוץ", "אחר"];
 import { loadSession, clearSession, type AppUser } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
 import { TopBar } from "@/components/v3/TopBar";
@@ -46,21 +48,51 @@ function getHolidaysForMonth(month: number) {
   return HOLIDAYS.filter(h => h.month === month);
 }
 
-function eventStyle(startMonth: number, endMonth: number, color: string) {
+const DAYS_IN_MONTH: Record<number, number> = {
+  1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+  7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
+};
+
+// רוחב מינימלי לאירוע בגאנט (% של רוחב כולל) — מבטיח שטקסט יהיה קריא
+const MIN_EVENT_WIDTH = 5;
+
+// מחשב מיקום אירוע בגאנט ברמת היום (לא רק החודש)
+function eventStyle(
+  startMonth: number,
+  endMonth: number,
+  color: string,
+  startDay?: number | null,
+  endDay?: number | null,
+) {
   const startIdx = SCHOOL_YEAR_MONTHS.indexOf(startMonth);
-  const endIdx   = SCHOOL_YEAR_MONTHS.indexOf(endMonth);
+  let endIdx     = SCHOOL_YEAR_MONTHS.indexOf(endMonth);
   if (startIdx < 0 || endIdx < 0) return null;
-  const left  = (startIdx / 12) * 100;
-  const width = ((endIdx - startIdx + 1) / 12) * 100;
-  return { left: `${left}%`, width: `calc(${width}% - 4px)`, background: color };
+  // אירוע שחוצה גבול שנת לימודים (למשל אוגוסט → ספטמבר) — clamp לסוף השנה הנוכחית
+  if (endIdx < startIdx) endIdx = 11;
+
+  const monthW = 100 / 12; // ≈ 8.333%
+  const sDays  = DAYS_IN_MONTH[startMonth] || 30;
+  const eDays  = DAYS_IN_MONTH[endMonth] || 30;
+  // מיקום מדויק בתוך החודש: 0 = תחילת החודש, 1 = סופו
+  const startOffset = startDay ? Math.max(0, (startDay - 1) / sDays) : 0;
+  const endOffset   = endDay   ? Math.min(1,  endDay      / eDays)   : 1;
+
+  const left  = (startIdx + startOffset) * monthW;
+  const right = (endIdx   + endOffset)   * monthW;
+  // מינימום רוחב כדי שטקסט יהיה קריא (אירוע יום-אחד מורחב ויזואלית)
+  const width = Math.max(right - left, MIN_EVENT_WIDTH);
+
+  return { insetInlineStart: `${left}%`, width: `calc(${width}% - 2px)`, background: color };
 }
 
 type ViewEvent = {
-  id: string; name: string; categoryId: string;
+  id: string; name: string; categoryId: string; categoryIds: string[];
   startMonth: number; endMonth: number;
   startDay?: number | null; endDay?: number | null;
   startYear?: number | null; endYear?: number | null;
+  startTime?: string | null; endTime?: string | null;
   ageGroups: string[]; location?: string | null; responsible?: string | null; status: string;
+  description?: string | null;
 };
 
 const SCHOOL_YEARS = [
@@ -132,24 +164,27 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     ...dbEvents.map(e => ({
       id: e.id, name: e.name,
       categoryId: e.category_id,
+      categoryIds: (e.category_ids && e.category_ids.length > 0) ? e.category_ids : [e.category_id],
       startMonth: e.start_month, endMonth: e.end_month,
       startDay: e.start_day, endDay: e.end_day,
       startYear: e.start_year, endYear: e.end_year,
+      startTime: e.start_time, endTime: e.end_time,
       ageGroups: e.age_groups || [],
       location: e.location, responsible: e.responsible,
       status: e.status,
+      description: e.description,
     })),
   ], [dbEvents]);
 
   // קטגוריות תצוגה — תמיד מ-Supabase. רק אם עוד לא נטענו (טוענים) — fallback מקומי
-  type DisplayCat = { id: string; name: string; department: "education" | "youth"; color: string };
+  type DisplayCat = { id: string; name: string; department: "education" | "youth" | "both"; color: string };
   const dbReady = dbCategories.length > 0;
   const allCats: DisplayCat[] = dbReady
     ? dbCategories.map(c => ({ id: c.id, name: c.name, department: c.department, color: c.color }))
-    : CATEGORIES.map(c => ({ id: c.id as string, name: c.name, department: c.department, color: c.color }));
+    : CATEGORIES.map(c => ({ id: c.id as string, name: c.name, department: c.department as DisplayCat["department"], color: c.color }));
 
-  const myCategories    = allCats.filter(c => c.department === department);
-  const otherCategories = allCats.filter(c => c.department !== department);
+  const myCategories    = allCats.filter(c => c.department === department || c.department === "both");
+  const otherCategories = allCats.filter(c => c.department !== department && c.department !== "both");
   const visibleCats  = filterDept === "mine" ? myCategories : [...myCategories, ...otherCategories];
 
   // מחזיר את שנת הלימודים של אירוע (שנת ספטמבר שלו)
@@ -158,16 +193,23 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     return e.startMonth >= 9 ? startY : startY - 1;
   }
 
+  function eventMatchesCat(e: ViewEvent, catId: string): boolean {
+    if (e.categoryIds && e.categoryIds.length > 0) return e.categoryIds.includes(catId);
+    return e.categoryId === catId;
+  }
+
   const filteredEvents = useMemo(() => {
     const searchLower = search.trim().toLowerCase();
     return allViewEvents.filter(e => {
-      const cat = allCats.find(c => c.id === e.categoryId);
-      if (!cat) return false;
-      if (!visibleCats.find(c => c.id === e.categoryId)) return false;
+      const evCats = e.categoryIds && e.categoryIds.length > 0 ? e.categoryIds : [e.categoryId];
+      const primaryCat = allCats.find(c => evCats.includes(c.id));
+      if (!primaryCat) return false;
+      if (!evCats.some(ec => visibleCats.find(c => c.id === ec))) return false;
       if (searchLower) {
+        const catNames = evCats.map(ec => allCats.find(c => c.id === ec)?.name).filter(Boolean).join(" ");
         const haystack = [
           e.name, e.location, e.responsible,
-          ...(e.ageGroups || []), cat.name,
+          ...(e.ageGroups || []), catNames,
         ].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(searchLower)) return false;
       }
@@ -176,10 +218,62 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     });
   }, [allViewEvents, allCats, visibleCats, search, schoolYear]);
 
-  const selectedEventData = selectedEvent ? allViewEvents.find(e => e.id === selectedEvent) : null;
-  const selectedCat = selectedEventData ? allCats.find(c => c.id === selectedEventData.categoryId) : null;
+  // הקצאת נתיבים (lanes) — מבוסס גבולות ויזואליים (% של רוחב גאנט)
+  // כדי שאירועי יום-אחד שמורחבים למינימום-רוחב לא יחפפו ויזואלית באותה שורה
+  const lanesByCat = useMemo(() => {
+    const laned = new Map<string, { ev: ViewEvent; lane: number }[]>();
+    const counts = new Map<string, number>();
+    const monthW = 100 / 12;
+    const boundsOf = (ev: ViewEvent) => {
+      const sIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.startMonth);
+      let   eIdx = SCHOOL_YEAR_MONTHS.indexOf(ev.endMonth);
+      if (sIdx < 0 || eIdx < 0) return { start: 0, end: MIN_EVENT_WIDTH };
+      if (eIdx < sIdx) eIdx = 11;
+      const sDays = DAYS_IN_MONTH[ev.startMonth] || 30;
+      const eDays = DAYS_IN_MONTH[ev.endMonth]   || 30;
+      const sOff = ev.startDay ? Math.max(0, (ev.startDay - 1) / sDays) : 0;
+      const eOff = ev.endDay   ? Math.min(1,  ev.endDay      / eDays)   : 1;
+      const start   = (sIdx + sOff) * monthW;
+      const realEnd = (eIdx + eOff) * monthW;
+      return { start, end: start + Math.max(realEnd - start, MIN_EVENT_WIDTH) };
+    };
+    for (const cat of visibleCats) {
+      const catEvents = filteredEvents.filter(e => eventMatchesCat(e, cat.id));
+      const sorted = [...catEvents].sort((a, b) => {
+        const am = SCHOOL_YEAR_MONTHS.indexOf(a.startMonth);
+        const bm = SCHOOL_YEAR_MONTHS.indexOf(b.startMonth);
+        if (am !== bm) return am - bm;
+        return (a.startDay || 1) - (b.startDay || 1);
+      });
+      const lanes: number[] = []; // endKey per lane
+      const list: { ev: ViewEvent; lane: number }[] = [];
+      for (const ev of sorted) {
+        const { start: sKey, end: eKey } = boundsOf(ev);
+        let lane = lanes.findIndex(end => end <= sKey);
+        if (lane === -1) { lane = lanes.length; lanes.push(eKey); }
+        else lanes[lane] = eKey;
+        list.push({ ev, lane });
+      }
+      laned.set(cat.id, list);
+      counts.set(cat.id, Math.max(1, lanes.length));
+    }
+    return { laned, counts };
+  }, [visibleCats, filteredEvents]);
 
-  const myEvents     = allViewEvents.filter(e => allCats.find(c => c.id === e.categoryId && c.department === department));
+  const selectedEventData = selectedEvent ? allViewEvents.find(e => e.id === selectedEvent) : null;
+  const selectedCats: DisplayCat[] = selectedEventData
+    ? (selectedEventData.categoryIds && selectedEventData.categoryIds.length > 0
+        ? selectedEventData.categoryIds
+        : [selectedEventData.categoryId])
+      .map(ec => allCats.find(c => c.id === ec))
+      .filter((c): c is DisplayCat => !!c)
+    : [];
+  const selectedCat = selectedCats[0] ?? null;
+
+  const myEvents     = allViewEvents.filter(e => {
+    const cats = e.categoryIds && e.categoryIds.length > 0 ? e.categoryIds : [e.categoryId];
+    return cats.some(ec => allCats.find(c => c.id === ec && (c.department === department || c.department === "both")));
+  });
   const thisMonthEvs = myEvents.filter(e => e.startMonth === new Date().getMonth() + 1);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -251,36 +345,80 @@ export default function StaffGantt({ department }: StaffGanttProps) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const [newEvent, setNewEvent] = useState({
-    name: "", categoryId: "",
+  const [newEvent, setNewEvent] = useState<{
+    name: string;
+    categoryIds: string[];
+    startDate: string; endDate: string;
+    startTime: string; endTime: string;
+    ageGroups: string; location: string; responsible: string;
+    description: string;
+  }>({
+    name: "", categoryIds: [],
     startDate: today, endDate: today,
+    startTime: "", endTime: "",
     ageGroups: "", location: "", responsible: "",
+    description: "",
   });
+
+  // יצירת תשתית inline בתוך טופס האירוע
+  const [showInfraInline, setShowInfraInline] = useState(false);
+  const [newInfra, setNewInfra] = useState<{ name: string; type: string; address: string; capacity: string }>({
+    name: "", type: "אולם", address: "", capacity: "",
+  });
+  const [savingInfra, setSavingInfra] = useState(false);
+
+  async function handleCreateInfrastructureInline() {
+    if (!newInfra.name.trim()) return;
+    setSavingInfra(true);
+    const { data, error } = await createInfrastructure({
+      name: newInfra.name.trim(),
+      type: newInfra.type,
+      address: newInfra.address.trim() || null,
+      capacity: newInfra.capacity ? Number(newInfra.capacity) : null,
+      active: true,
+    });
+    setSavingInfra(false);
+    if (error) { toast("שגיאה ביצירת תשתית: " + error.message, "error"); return; }
+    const refreshed = await getInfrastructures();
+    setInfrastructures(refreshed);
+    if (data) {
+      setNewEvent(prev => ({ ...prev, location: data.name }));
+    }
+    setNewInfra({ name: "", type: "אולם", address: "", capacity: "" });
+    setShowInfraInline(false);
+    toast("התשתית נוספה למאגר ✨", "success");
+  }
 
   function startEdit(ev: ViewEvent) {
     const startDay  = ev.startDay  ?? 1;
     const endDay    = ev.endDay    ?? startDay;
     const startYear = (ev as ViewEvent & { startYear?: number | null }).startYear ?? null;
     const endYear   = (ev as ViewEvent & { endYear?: number | null }).endYear   ?? null;
+    const startTime = (ev.startTime ?? "").slice(0, 5);
+    const endTime   = (ev.endTime   ?? "").slice(0, 5);
+    const cats = ev.categoryIds && ev.categoryIds.length > 0 ? ev.categoryIds : [ev.categoryId];
     setEditingId(ev.id);
     setNewEvent({
       name:        ev.name,
-      categoryId:  ev.categoryId,
+      categoryIds: cats,
       startDate:   ymdToDate(startYear, ev.startMonth, startDay),
       endDate:     ymdToDate(endYear,   ev.endMonth,   endDay),
+      startTime,
+      endTime,
       ageGroups:   ev.ageGroups.join(", "),
       location:    ev.location ?? "",
       responsible: ev.responsible ?? "",
+      description: ev.description ?? "",
     });
     setShowNewEvent(true);
     setSelectedEvent(null);
   }
 
   useEffect(() => {
-    if (myCategories.length && (!newEvent.categoryId || !myCategories.find(c => c.id === newEvent.categoryId))) {
-      setNewEvent(p => ({ ...p, categoryId: myCategories[0].id }));
+    if (myCategories.length && newEvent.categoryIds.length === 0) {
+      setNewEvent(p => ({ ...p, categoryIds: [myCategories[0].id] }));
     }
-  }, [myCategories, newEvent.categoryId]);
+  }, [myCategories, newEvent.categoryIds.length]);
 
   async function handleCreateEvent(skipConflictCheck = false) {
     const start = dateToYMD(newEvent.startDate);
@@ -294,17 +432,20 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     }
     setCreating(true);
     const payload = {
-      name:        newEvent.name,
-      category_id: newEvent.categoryId,
-      start_month: start.month,
-      end_month:   end.month,
-      start_day:   start.day,
-      end_day:     end.day,
-      start_year:  start.year,
-      end_year:    end.year,
-      age_groups:  newEvent.ageGroups ? newEvent.ageGroups.split(",").map(s => s.trim()).filter(Boolean) : [],
-      location:    newEvent.location || null,
-      responsible: newEvent.responsible || null,
+      name:         newEvent.name,
+      category_ids: newEvent.categoryIds,
+      start_month:  start.month,
+      end_month:    end.month,
+      start_day:    start.day,
+      end_day:      end.day,
+      start_year:   start.year,
+      end_year:     end.year,
+      start_time:   newEvent.startTime || null,
+      end_time:     newEvent.endTime || null,
+      age_groups:   newEvent.ageGroups ? newEvent.ageGroups.split(",").map(s => s.trim()).filter(Boolean) : [],
+      location:     newEvent.location || null,
+      responsible:  newEvent.responsible || null,
+      description:  newEvent.description || null,
     };
     const result = editingId
       ? await updateEvent(editingId, payload)
@@ -326,7 +467,7 @@ export default function StaffGantt({ department }: StaffGanttProps) {
     setShowNewEvent(false);
     setConflictWarning(null);
     setEditingId(null);
-    setNewEvent({ name: "", categoryId: myCategories[0]?.id ?? "", startDate: today, endDate: today, ageGroups: "", location: "", responsible: "" });
+    setNewEvent({ name: "", categoryIds: myCategories[0]?.id ? [myCategories[0].id] : [], startDate: today, endDate: today, startTime: "", endTime: "", ageGroups: "", location: "", responsible: "", description: "" });
   }
 
   async function handleDelete(id: string) {
@@ -690,12 +831,13 @@ export default function StaffGantt({ department }: StaffGanttProps) {
 
           {/* שורות קטגוריות */}
           {visibleCats.map(cat => {
-            const isMyDept = cat.department === department;
-            const catEvents = filteredEvents.filter(e => e.categoryId === cat.id);
+            const isMyDept = cat.department === department || cat.department === "both";
+            const laneCount = lanesByCat.counts.get(cat.id) || 1;
+            const rowHeight = Math.max(44, 12 + laneCount * 26);
             return (
               <div key={cat.id} style={{
                 display: "grid", gridTemplateColumns: "120px repeat(12, 1fr)",
-                borderBottom: "0.5px solid var(--border)", minHeight: 44,
+                borderBottom: "0.5px solid var(--border)", minHeight: rowHeight,
                 background: isMyDept ? "transparent" : "rgba(0,0,0,0.015)",
                 transition: "background 0.1s",
               }}
@@ -711,6 +853,9 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, flexShrink: 0, opacity: isMyDept ? 1 : 0.5 }} />
                   {cat.name}
+                  {cat.department === "both" && <span style={{ fontSize: 9, color: "var(--text-tertiary)", marginRight: 2 }}>
+                    (משותף)
+                  </span>}
                   {!isMyDept && <span style={{ fontSize: 9, color: "var(--text-tertiary)", marginRight: 2 }}>
                     ({cat.department === "education" ? "חינוך" : "נוער"})
                   </span>}
@@ -719,17 +864,18 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                   {SCHOOL_YEAR_MONTHS.map((_, i) => (
                     <div key={i} style={{ borderRight: i < 11 ? "0.5px solid var(--border)" : "none" }} />
                   ))}
-                  {catEvents.map(ev => {
-                    const style = eventStyle(ev.startMonth, ev.endMonth, isMyDept ? cat.color : cat.color + "88");
+                  {(lanesByCat.laned.get(cat.id) || []).map(({ ev, lane }) => {
+                    const style = eventStyle(ev.startMonth, ev.endMonth, isMyDept ? cat.color : cat.color + "88", ev.startDay, ev.endDay);
                     if (!style) return null;
+                    const top = 6 + lane * 26;
                     return (
                       <button
                         key={ev.id}
                         onClick={() => setSelectedEvent(selectedEvent === ev.id ? null : ev.id)}
-                        title={ev.name}
+                        title={`${ev.name}${ev.startDay ? ` · ${ev.startDay}/${ev.startMonth}` : ""}${ev.endDay && (ev.endDay !== ev.startDay || ev.endMonth !== ev.startMonth) ? `–${ev.endDay}/${ev.endMonth}` : ""}`}
                         style={{
-                          position: "absolute", top: 10, height: 24,
-                          borderRadius: 4, padding: "3px 7px",
+                          position: "absolute", top, height: 22,
+                          borderRadius: 4, padding: "2px 6px",
                           fontSize: 10, fontWeight: 500,
                           cursor: "pointer", whiteSpace: "nowrap",
                           overflow: "hidden", textOverflow: "ellipsis",
@@ -769,14 +915,14 @@ export default function StaffGantt({ department }: StaffGanttProps) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
               <span style={{ width: 12, height: 12, borderRadius: 3, background: selectedCat?.color || cfg.primary, flexShrink: 0 }} />
               <h2 style={{ fontSize: 17, fontWeight: 500, margin: 0 }}>{selectedEventData.name}</h2>
-              {selectedCat && (
-                <span style={{
+              {selectedCats.map(cat => (
+                <span key={cat.id} style={{
                   fontSize: 11, padding: "2px 8px", borderRadius: 10,
-                  background: selectedCat.color + "22", color: selectedCat.color,
+                  background: cat.color + "22", color: cat.color,
                 }}>
-                  {selectedCat.name}
+                  {cat.name}
                 </span>
-              )}
+              ))}
               <span style={{
                 fontSize: 11, padding: "2px 8px", borderRadius: 10,
                 background: selectedEventData.status === "published" ? "#DCFCE7" : "#FEF9C3",
@@ -790,10 +936,20 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                 {(selectedEventData.endMonth !== selectedEventData.startMonth || (selectedEventData.endDay && selectedEventData.endDay !== selectedEventData.startDay))
                   ? ` – ${selectedEventData.endDay ? `${selectedEventData.endDay} ` : ""}${MONTHS_HE[SCHOOL_YEAR_MONTHS.indexOf(selectedEventData.endMonth)]}` : ""}
               </span>
+              {(selectedEventData.startTime || selectedEventData.endTime) && (
+                <span>🕐 {selectedEventData.startTime ? selectedEventData.startTime.slice(0,5) : ""}
+                  {selectedEventData.endTime ? ` – ${selectedEventData.endTime.slice(0,5)}` : ""}
+                </span>
+              )}
               {selectedEventData.location   && <span>📍 {selectedEventData.location}</span>}
               {selectedEventData.responsible && <span>👤 {selectedEventData.responsible}</span>}
               {selectedEventData.ageGroups.length > 0 && <span>👥 {selectedEventData.ageGroups.join(", ")}</span>}
             </div>
+            {selectedEventData.description && (
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {selectedEventData.description}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => selectedEventData && startEdit(selectedEventData)} style={{
                 padding: "10px 20px", fontSize: 13, fontWeight: 500,
@@ -900,11 +1056,44 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                 </div>
               ))}
 
-              {/* שדה מיקום: בחירה מהמאגר + טקסט חופשי */}
+              {/* הערות / תיאור */}
               <div>
                 <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  מיקום
+                  הערות / תיאור
                 </label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="כמה מילים על האירוע, מטרות, פרטים נוספים..."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "8px 11px", fontSize: 13,
+                    border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                    fontFamily: "inherit", outline: "none", resize: "vertical",
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
+
+              {/* שדה מיקום: בחירה מהמאגר + טקסט חופשי + יצירת תשתית inline */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    מיקום
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowInfraInline(v => !v)}
+                    style={{
+                      background: "transparent", border: "none",
+                      color: cfg.primary, fontSize: 11, fontWeight: 500,
+                      cursor: "pointer", padding: "2px 6px",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {showInfraInline ? "× סגור" : "+ צור תשתית חדשה"}
+                  </button>
+                </div>
                 {infrastructures.length > 0 && (
                   <select
                     value={infrastructures.find(i => i.name === newEvent.location)?.id || ""}
@@ -937,25 +1126,129 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                     fontFamily: "inherit", outline: "none",
                   }}
                 />
+
+                {/* תת-טופס: יצירת תשתית חדשה */}
+                {showInfraInline && (
+                  <div style={{
+                    marginTop: 10, padding: "12px",
+                    background: cfg.lighter, borderRadius: "var(--radius-md)",
+                    border: `1px solid ${cfg.light}`,
+                    display: "flex", flexDirection: "column", gap: 8,
+                  }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: cfg.primaryDark }}>
+                      🏛 תשתית חדשה למאגר העירוני
+                    </p>
+                    <input
+                      value={newInfra.name}
+                      onChange={e => setNewInfra(p => ({ ...p, name: e.target.value }))}
+                      placeholder="שם המקום *"
+                      style={{
+                        padding: "7px 10px", fontSize: 12,
+                        border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                        fontFamily: "inherit", outline: "none", background: "#fff",
+                      }}
+                    />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <select
+                        value={newInfra.type}
+                        onChange={e => setNewInfra(p => ({ ...p, type: e.target.value }))}
+                        style={{
+                          padding: "7px 10px", fontSize: 12,
+                          border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                          fontFamily: "inherit", background: "#fff", outline: "none",
+                        }}
+                      >
+                        {INFRA_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <input
+                        type="number"
+                        value={newInfra.capacity}
+                        onChange={e => setNewInfra(p => ({ ...p, capacity: e.target.value }))}
+                        placeholder="קיבולת"
+                        style={{
+                          padding: "7px 10px", fontSize: 12,
+                          border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                          fontFamily: "inherit", outline: "none", background: "#fff",
+                        }}
+                      />
+                    </div>
+                    <input
+                      value={newInfra.address}
+                      onChange={e => setNewInfra(p => ({ ...p, address: e.target.value }))}
+                      placeholder="כתובת (אופציונלי)"
+                      style={{
+                        padding: "7px 10px", fontSize: 12,
+                        border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                        fontFamily: "inherit", outline: "none", background: "#fff",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateInfrastructureInline}
+                      disabled={!newInfra.name.trim() || savingInfra}
+                      style={{
+                        padding: "7px", fontSize: 12, fontWeight: 500,
+                        background: newInfra.name.trim() ? cfg.primary : "var(--bg-secondary)",
+                        color: newInfra.name.trim() ? "#fff" : "var(--text-tertiary)",
+                        border: "none", borderRadius: "var(--radius-md)",
+                        cursor: newInfra.name.trim() ? "pointer" : "not-allowed",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {savingInfra ? "שומר..." : "שמור תשתית והשתמש"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
                 <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  תחום *
+                  תחומים * (ניתן לבחור יותר מאחד)
                 </label>
-                <select
-                  value={newEvent.categoryId}
-                  onChange={e => setNewEvent(prev => ({ ...prev, categoryId: e.target.value as typeof prev.categoryId }))}
-                  style={{
-                    width: "100%", padding: "8px 11px", fontSize: 13,
-                    border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
-                    fontFamily: "inherit", background: "#fff", outline: "none",
-                  }}
-                >
-                  {myCategories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
+                <div style={{
+                  border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                  background: "#fff", padding: 6, maxHeight: 180, overflowY: "auto",
+                  display: "flex", flexDirection: "column", gap: 2,
+                }}>
+                  {myCategories.map(cat => {
+                    const checked = newEvent.categoryIds.includes(cat.id);
+                    return (
+                      <label key={cat.id} style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "6px 8px", borderRadius: 6,
+                        cursor: "pointer", fontSize: 13,
+                        background: checked ? cat.color + "18" : "transparent",
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={e => setNewEvent(prev => {
+                            const next = e.target.checked
+                              ? [...prev.categoryIds, cat.id]
+                              : prev.categoryIds.filter(id => id !== cat.id);
+                            return { ...prev, categoryIds: next };
+                          })}
+                          style={{ accentColor: cat.color }}
+                        />
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: cat.color, flexShrink: 0 }} />
+                        <span>{cat.name}</span>
+                        {cat.department === "both" && (
+                          <span style={{ fontSize: 10, color: "var(--text-tertiary)", marginRight: "auto" }}>משותף</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                {newEvent.categoryIds.length === 0 && (
+                  <p style={{ fontSize: 11, color: "var(--danger)", margin: "4px 0 0" }}>
+                    יש לבחור לפחות תחום אחד
+                  </p>
+                )}
+                {newEvent.categoryIds.length > 1 && (
+                  <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: "4px 0 0" }}>
+                    האירוע יופיע ב-{newEvent.categoryIds.length} שורות בגאנט
+                  </p>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1005,21 +1298,66 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                 טווח: ספטמבר 2024 – אוגוסט 2027 (תשפ״ה / תשפ״ו / תשפ״ז)
               </p>
 
-              {!conflictWarning && (
-                <button
-                  onClick={() => handleCreateEvent(false)}
-                  disabled={!newEvent.name || creating}
-                  style={{
-                    marginTop: 4, padding: "10px 0", fontSize: 14, fontWeight: 500,
-                    background: newEvent.name ? cfg.primary : "var(--bg-secondary)",
-                    color: newEvent.name ? "#fff" : "var(--text-tertiary)",
-                    border: "none", borderRadius: "var(--radius-md)", cursor: newEvent.name ? "pointer" : "not-allowed",
-                    width: "100%",
-                  }}
-                >
-                  {creating ? "שומר..." : editingId ? "שמור שינויים" : "צור אירוע"}
-                </button>
-              )}
+              {/* שעות (אופציונלי) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    שעת התחלה
+                  </label>
+                  <input
+                    type="time"
+                    value={newEvent.startTime}
+                    onChange={e => setNewEvent(prev => ({
+                      ...prev,
+                      startTime: e.target.value,
+                      endTime: prev.endTime && prev.endTime < e.target.value ? e.target.value : prev.endTime,
+                    }))}
+                    style={{
+                      width: "100%", padding: "8px 11px", fontSize: 13,
+                      border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                      fontFamily: "inherit", background: "#fff", outline: "none",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    שעת סיום
+                  </label>
+                  <input
+                    type="time"
+                    value={newEvent.endTime}
+                    min={newEvent.startTime || undefined}
+                    onChange={e => setNewEvent(prev => ({ ...prev, endTime: e.target.value }))}
+                    style={{
+                      width: "100%", padding: "8px 11px", fontSize: 13,
+                      border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)",
+                      fontFamily: "inherit", background: "#fff", outline: "none",
+                    }}
+                  />
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: "-4px 0 0" }}>
+                השעות אופציונליות — השאר ריק לאירוע כל-יומי
+              </p>
+
+              {!conflictWarning && (() => {
+                const canSave = !!newEvent.name && newEvent.categoryIds.length > 0;
+                return (
+                  <button
+                    onClick={() => handleCreateEvent(false)}
+                    disabled={!canSave || creating}
+                    style={{
+                      marginTop: 4, padding: "10px 0", fontSize: 14, fontWeight: 500,
+                      background: canSave ? cfg.primary : "var(--bg-secondary)",
+                      color: canSave ? "#fff" : "var(--text-tertiary)",
+                      border: "none", borderRadius: "var(--radius-md)", cursor: canSave ? "pointer" : "not-allowed",
+                      width: "100%",
+                    }}
+                  >
+                    {creating ? "שומר..." : editingId ? "שמור שינויים" : "צור אירוע"}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
