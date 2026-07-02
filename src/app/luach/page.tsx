@@ -122,6 +122,7 @@ export default function LuachPage() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [anchor, setAnchor] = useState<number>(() => weekStartOf(Date.now()));
   const [todayTs] = useState<number>(() => startOfDay(Date.now()));
 
@@ -135,8 +136,9 @@ export default function LuachPage() {
       const p = await fetchProfile();
       setHasProfile(!!p);
     })();
-    getEvents().then(setDbEvents);
-    getCategories().then(setDbCategories);
+    Promise.all([getEvents(), getCategories()]).then(([evs, cats]) => {
+      setDbEvents(evs); setDbCategories(cats); setLoading(false);
+    });
     const channel = supabase
       .channel("luach-events")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
@@ -250,6 +252,21 @@ export default function LuachPage() {
       endYear: e.endYear, endMonth: e.endMonth, endDay: e.endDay,
     });
   }
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: BG }}>
+      <div style={{ background: "var(--parent-primary)", height: 52 }} />
+      <div style={{ padding: "18px 14px", maxWidth: 820, margin: "0 auto", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="skeleton" style={{ height: 110, borderRadius: 18 }} />
+        {[1,2,3].map(i => (
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div className="skeleton" style={{ height: 22, width: 160, borderRadius: 8 }} />
+            <div className="skeleton" style={{ height: 88, borderRadius: 14 }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: BG }}>
