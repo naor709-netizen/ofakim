@@ -173,27 +173,24 @@ export default function MonthlyView({
       {/* ניווט חודשים */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 16px", background: "var(--bg-secondary)",
+        padding: "12px 16px", background: primaryColor,
         borderBottom: "0.5px solid var(--border)", gap: 8, flexWrap: "wrap",
       }}>
-        <button onClick={() => navigateMonth(-1)} style={navBtnStyle}>→ קודם</button>
+        <button onClick={() => navigateMonth(-1)} style={{ ...navBtnStyle, color: "#fff", borderColor: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.18)" }}>→ קודם</button>
 
         <div style={{ textAlign: "center", flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>
             {monthLabel} {currentYear}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>
             שנת לימודים {schoolYearLabel}
             {monthHolidays.length > 0 && ` · ${monthHolidays.map(h => h.name).join(" · ")}`}
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={goToToday} style={{
-            ...navBtnStyle,
-            background: primaryColor, color: "#fff", borderColor: primaryColor,
-          }}>היום</button>
-          <button onClick={() => navigateMonth(1)} style={navBtnStyle}>הבא ←</button>
+          <button onClick={goToToday} style={{ ...navBtnStyle, background: "rgba(255,255,255,0.25)", color: "#fff", borderColor: "rgba(255,255,255,0.4)", fontWeight: 600 }}>היום</button>
+          <button onClick={() => navigateMonth(1)} style={{ ...navBtnStyle, color: "#fff", borderColor: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.18)" }}>הבא ←</button>
         </div>
       </div>
 
