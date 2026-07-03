@@ -871,13 +871,16 @@ export default function StaffGantt({ department }: StaffGanttProps) {
         <div style={{ minWidth: 900 }}>
 
           {/* כותרת חודשים */}
-          <div style={{ display: "grid", gridTemplateColumns: "120px repeat(12, 1fr)", borderBottom: "0.5px solid var(--border)", background: "var(--bg-secondary)" }}>
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-secondary)" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "140px repeat(12, 1fr)", borderBottom: "2px solid " + cfg.primary, background: cfg.primary }}>
+            <div style={{ padding: "10px 14px", fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
+              קטגוריה
+            </div>
             {SCHOOL_YEAR_MONTHS.map((m, i) => (
               <div key={m} style={{
-                padding: "8px 4px", textAlign: "center", fontSize: 11,
-                fontWeight: 500, color: "var(--text-secondary)",
-                borderRight: i < 11 ? "0.5px solid var(--border)" : "none",
+                padding: "10px 4px", textAlign: "center", fontSize: 11,
+                fontWeight: 600, color: "#fff",
+                borderRight: i < 11 ? "1px solid rgba(255,255,255,0.15)" : "none",
+                letterSpacing: "0.03em",
               }}>
                 {MONTHS_HE[i]}
               </div>
@@ -885,21 +888,22 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </div>
 
           {/* שורת חגים */}
-          <div style={{ display: "grid", gridTemplateColumns: "120px repeat(12, 1fr)", borderBottom: "0.5px solid var(--border)", background: "#FFFDF5" }}>
-            <div style={{ padding: "5px 12px", fontSize: 10, fontWeight: 500, color: "#BA7517", display: "flex", alignItems: "center" }}>
-              חגים ומועדים
+          <div style={{ display: "grid", gridTemplateColumns: "140px repeat(12, 1fr)", borderBottom: "1px solid #F5D78E", background: "linear-gradient(90deg,#FFFBEB,#FFFDF5)" }}>
+            <div style={{ padding: "6px 14px", fontSize: 10, fontWeight: 600, color: "#92400E", display: "flex", alignItems: "center", gap: 5 }}>
+              ✡️ חגים
             </div>
             <div style={{ gridColumn: "2 / -1", display: "grid", gridTemplateColumns: "repeat(12, 1fr)" }}>
               {SCHOOL_YEAR_MONTHS.map((m, i) => {
                 const holidays = getHolidaysForMonth(m);
                 return (
-                  <div key={m} style={{ borderRight: i < 11 ? "0.5px solid var(--border)" : "none", padding: "3px 3px", display: "flex", flexWrap: "wrap", gap: 2 }}>
+                  <div key={m} style={{ borderRight: i < 11 ? "0.5px solid #F5D78E" : "none", padding: "4px 3px", display: "flex", flexWrap: "wrap", gap: 2 }}>
                     {holidays.map(h => (
                       <span key={h.name} title={h.name} style={{
-                        fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                        background: h.type === "vacation" ? "#FEF3C7" : h.type === "memorial" ? "#F3F4F6" : "#FDE68A",
-                        color: h.type === "vacation" ? "#92400E" : h.type === "memorial" ? "#374151" : "#78350F",
+                        fontSize: 9, padding: "2px 5px", borderRadius: 4,
+                        background: h.type === "vacation" ? "#FDE68A" : h.type === "memorial" ? "#E5E7EB" : "#FCD34D",
+                        color: h.type === "vacation" ? "#78350F" : h.type === "memorial" ? "#374151" : "#78350F",
                         whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis",
+                        fontWeight: 500,
                       }}>
                         {h.name}
                       </span>
@@ -911,61 +915,93 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </div>
 
           {/* שורות קטגוריות */}
-          {visibleCats.map(cat => {
+          {visibleCats.map((cat, catIdx) => {
             const isMyDept = cat.department === department || cat.department === "both";
             const laneCount = lanesByCat.counts.get(cat.id) || 1;
-            const rowHeight = Math.max(44, 12 + laneCount * 26);
+            const rowHeight = Math.max(48, 14 + laneCount * 28);
+            const catIcon: Record<string, string> = {
+              early: "🌱", elementary: "📚", secondary: "🎓", haredi: "✡️",
+              camps: "⛺", "edu-general": "🔵", training: "📋", breaks: "🏖️",
+              dream: "✨", social: "🤝", meaningful: "💫", movements: "🏕️",
+              prep: "🎯", recreation: "🎮", "youth-general": "🟠",
+            };
+            const icon = catIcon[cat.id] ?? "●";
             return (
               <div key={cat.id} style={{
-                display: "grid", gridTemplateColumns: "120px repeat(12, 1fr)",
-                borderBottom: "0.5px solid var(--border)", minHeight: rowHeight,
-                background: isMyDept ? "transparent" : "rgba(0,0,0,0.015)",
-                transition: "background 0.1s",
+                display: "grid", gridTemplateColumns: "140px repeat(12, 1fr)",
+                borderBottom: `1px solid ${cat.color}22`,
+                minHeight: rowHeight,
+                background: isMyDept
+                  ? `linear-gradient(90deg, ${cat.color}0D 0%, transparent 140px)`
+                  : "rgba(0,0,0,0.012)",
+                transition: "background 0.15s",
               }}
-                onMouseEnter={e => { if (isMyDept) e.currentTarget.style.background = cfg.lighter + "44"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = isMyDept ? "transparent" : "rgba(0,0,0,0.015)"; }}
+                onMouseEnter={e => { if (isMyDept) e.currentTarget.style.background = `linear-gradient(90deg, ${cat.color}22 0%, ${cat.color}08 100%)`; }}
+                onMouseLeave={e => { e.currentTarget.style.background = isMyDept ? `linear-gradient(90deg, ${cat.color}0D 0%, transparent 140px)` : "rgba(0,0,0,0.012)"; }}
               >
+                {/* תווית קטגוריה */}
                 <div style={{
-                  padding: "0 12px", fontSize: 12,
-                  fontWeight: isMyDept ? 500 : 400,
-                  color: isMyDept ? "var(--text-primary)" : "var(--text-tertiary)",
-                  display: "flex", alignItems: "center", gap: 6,
-                  borderLeft: "0.5px solid var(--border)",
+                  padding: "0 10px", fontSize: 12,
+                  fontWeight: isMyDept ? 600 : 400,
+                  color: isMyDept ? cat.color : "var(--text-tertiary)",
+                  display: "flex", alignItems: "center", gap: 7,
+                  borderLeft: `3px solid ${isMyDept ? cat.color : "transparent"}`,
+                  background: isMyDept ? cat.color + "08" : "transparent",
                 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, flexShrink: 0, opacity: isMyDept ? 1 : 0.5 }} />
-                  {cat.name}
-                  {cat.department === "both" && <span style={{ fontSize: 9, color: "var(--text-tertiary)", marginRight: 2 }}>
-                    (משותף)
-                  </span>}
-                  {!isMyDept && <span style={{ fontSize: 9, color: "var(--text-tertiary)", marginRight: 2 }}>
-                    ({cat.department === "education" ? "חינוך" : "נוער"})
+                  <span style={{ fontSize: 14, lineHeight: 1, opacity: isMyDept ? 1 : 0.4, flexShrink: 0 }}>{icon}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {cat.name}
+                  </span>
+                  {!isMyDept && <span style={{ fontSize: 8, color: "var(--text-tertiary)", marginRight: 2, flexShrink: 0 }}>
+                    {cat.department === "education" ? "חינוך" : "נוער"}
                   </span>}
                 </div>
+
+                {/* תאי גאנט */}
                 <div style={{ gridColumn: "2 / -1", display: "grid", gridTemplateColumns: "repeat(12, 1fr)", position: "relative" }}>
                   {SCHOOL_YEAR_MONTHS.map((_, i) => (
-                    <div key={i} style={{ borderRight: i < 11 ? "0.5px solid var(--border)" : "none" }} />
+                    <div key={i} style={{
+                      borderRight: i < 11 ? `0.5px solid ${catIdx % 2 === 0 ? "#e5e7eb" : "#f3f4f6"}` : "none",
+                      background: i % 2 === 0 ? "transparent" : "rgba(0,0,0,0.008)",
+                    }} />
                   ))}
                   {(lanesByCat.laned.get(cat.id) || []).map(({ ev, lane }) => {
-                    const style = eventStyle(ev.startMonth, ev.endMonth, isMyDept ? cat.color : cat.color + "88", ev.startDay, ev.endDay);
+                    const style = eventStyle(ev.startMonth, ev.endMonth, cat.color, ev.startDay, ev.endDay);
                     if (!style) return null;
-                    const top = 6 + lane * 26;
+                    const top = 8 + lane * 28;
+                    const isSelected = selectedEvent === ev.id;
                     return (
                       <button
                         key={ev.id}
                         onClick={() => setSelectedEvent(selectedEvent === ev.id ? null : ev.id)}
-                        title={`${ev.name}${ev.startDay ? ` · ${ev.startDay}/${ev.startMonth}` : ""}${ev.endDay && (ev.endDay !== ev.startDay || ev.endMonth !== ev.startMonth) ? `–${ev.endDay}/${ev.endMonth}` : ""}`}
+                        title={`${ev.name}${ev.startDay ? ` · ${ev.startDay}/${ev.startMonth}` : ""}`}
                         style={{
-                          position: "absolute", top, height: 22,
-                          borderRadius: 4, padding: "2px 6px",
-                          fontSize: 10, fontWeight: 500,
+                          ...style,
+                          position: "absolute", top, height: 24,
+                          borderRadius: 6, padding: "0 8px",
+                          fontSize: 10, fontWeight: 600,
                           cursor: "pointer", whiteSpace: "nowrap",
                           overflow: "hidden", textOverflow: "ellipsis",
-                          border: "none", color: "#fff",
-                          transition: "transform 0.1s",
-                          ...style,
+                          border: isSelected ? `2px solid #fff` : "none",
+                          color: "#fff",
+                          boxShadow: isSelected
+                            ? `0 0 0 2px ${cat.color}, 0 4px 12px ${cat.color}66`
+                            : `0 2px 6px ${cat.color}55`,
+                          background: `linear-gradient(135deg, ${cat.color} 0%, ${cat.color}cc 100%)`,
+                          transition: "all 0.15s",
+                          opacity: isMyDept ? 1 : 0.5,
+                          letterSpacing: "0.01em",
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1.5px)")}
-                        onMouseLeave={e => (e.currentTarget.style.transform = "")}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
+                          e.currentTarget.style.boxShadow = `0 6px 16px ${cat.color}88`;
+                          e.currentTarget.style.zIndex = "5";
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = "";
+                          e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px ${cat.color}, 0 4px 12px ${cat.color}66` : `0 2px 6px ${cat.color}55`;
+                          e.currentTarget.style.zIndex = "";
+                        }}
                       >
                         {ev.name}
                       </button>
