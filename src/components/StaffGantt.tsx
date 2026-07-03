@@ -632,8 +632,13 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           </div>
         </div>
 
-        {/* סרגל פעולות */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {/* סרגל פעולות — דביק בראש המסך */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap",
+          position: "sticky", top: 0, zIndex: 20,
+          background: cfg.bg, padding: "8px 0 8px",
+          borderBottom: "0.5px solid var(--border)",
+        }}>
           <button
             onClick={() => setShowNewEvent(true)}
             disabled={!dbReady}
