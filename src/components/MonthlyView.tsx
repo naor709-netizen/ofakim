@@ -219,6 +219,10 @@ export default function MonthlyView({
         })}
       </div>
 
+      {/* כותרת + רשת — גלילה אופקית במובייל */}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as never }}>
+      <div style={{ minWidth: 420 }}>
+
       {/* כותרת ימי שבוע */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: "var(--bg-secondary)", borderBottom: "0.5px solid var(--border)" }}>
         {DAY_NAMES_HE.map((d, i) => (
@@ -334,6 +338,8 @@ export default function MonthlyView({
           );
         })}
       </div>
+      </div>{/* minWidth */}
+      </div>{/* overflowX */}
 
       {/* חלון כל אירועי היום */}
       {dayModal !== null && (
