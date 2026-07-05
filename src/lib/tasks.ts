@@ -1,10 +1,12 @@
 "use client";
 
 // ============================================
-// יומן המשימות של אופיר — data layer (localStorage)
+// יומן המשימות של אופיר — data layer
+// localStorage cache + Supabase cloud sync (optional)
 // ============================================
 
 export type TaskNature = "personal" | "urgent" | "routine";
+export type TaskStatus = "todo" | "in_progress" | "done";
 
 export const NATURE_LABELS: Record<TaskNature, string> = {
   personal: "אישי",
@@ -13,9 +15,21 @@ export const NATURE_LABELS: Record<TaskNature, string> = {
 };
 
 export const NATURE_COLORS: Record<TaskNature, string> = {
-  personal: "#8B5CF6",
-  urgent: "#EF4444",
-  routine: "#0EA5E9",
+  personal: "#A78BFA",
+  urgent: "#F87171",
+  routine: "#38BDF8",
+};
+
+export const STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: "לביצוע",
+  in_progress: "בתהליך",
+  done: "הושלם",
+};
+
+export const STATUS_COLORS: Record<TaskStatus, string> = {
+  todo: "#94A3B8",
+  in_progress: "#FBBF24",
+  done: "#2DD4A8",
 };
 
 export interface TaskCategory {
@@ -47,10 +61,10 @@ export interface Task {
   categoryId: string | null;
   nature: TaskNature | null;
   critical: boolean;
+  status: TaskStatus;
   createdAt: string; // ISO — תאריך פתיחה
   dueDate: string | null; // YYYY-MM-DD — יעד, מוצג בלוח השנה
   endDate: string | null; // YYYY-MM-DD — תאריך סיום
-  done: boolean;
   reminders: TaskReminder[];
   files: TaskFile[];
   subtasks: Task[]; // שלבים — לכל שלב כל מאפייני משימה
@@ -63,15 +77,20 @@ export interface JournalData {
 
 const STORAGE_KEY = "ofir-task-journal";
 
+// צבעי ברירת מחדל מאומתים לרצועת dark mode (validate_palette.js)
 export const DEFAULT_CATEGORIES: TaskCategory[] = [
-  { id: "work", name: "עבודה", color: "#2563EB" },
-  { id: "home", name: "בית", color: "#14B8A6" },
-  { id: "meetings", name: "פגישות", color: "#0EA5E9" },
-  { id: "errands", name: "סידורים", color: "#F59E0B" },
+  { id: "work", name: "עבודה", color: "#3D7EFF" },
+  { id: "home", name: "בית", color: "#0FA47E" },
+  { id: "meetings", name: "פגישות", color: "#0E96D2" },
+  { id: "errands", name: "סידורים", color: "#C07F0E" },
 ];
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+export function isDone(t: Task): boolean {
+  return t.status === "done";
 }
 
 export function emptyTask(): Task {
@@ -83,14 +102,23 @@ export function emptyTask(): Task {
     categoryId: null,
     nature: null,
     critical: false,
+    status: "todo",
     createdAt: new Date().toISOString(),
     dueDate: null,
     endDate: null,
-    done: false,
     reminders: [],
     files: [],
     subtasks: [],
   };
+}
+
+type LegacyTask = Partial<Task> & { done?: boolean };
+
+function normalizeTask(t: LegacyTask): Task {
+  const status: TaskStatus = t.status ?? (t.done ? "done" : "todo");
+  const base = { ...emptyTask(), ...t, status };
+  delete (base as LegacyTask).done;
+  return { ...base, subtasks: (t.subtasks ?? []).map(normalizeTask) };
 }
 
 export function loadJournal(): JournalData {
@@ -110,10 +138,6 @@ export function loadJournal(): JournalData {
   }
 }
 
-function normalizeTask(t: Partial<Task>): Task {
-  return { ...emptyTask(), ...t, subtasks: (t.subtasks ?? []).map(normalizeTask) };
-}
-
 export function saveJournal(data: JournalData): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -125,7 +149,9 @@ export function saveJournal(data: JournalData): boolean {
   }
 }
 
-// --- store for useSyncExternalStore ---
+// ============================================
+// store (useSyncExternalStore) + cloud sync
+// ============================================
 
 let snapshot: JournalData | null = null;
 const listeners = new Set<() => void>();
@@ -144,14 +170,187 @@ export function getServerJournalSnapshot(): JournalData | null {
   return null;
 }
 
+function notify() {
+  listeners.forEach((l) => l());
+}
+
+// --- sync state (shown in the header) ---
+
+export type SyncState = "local" | "syncing" | "synced" | "error";
+
+let syncState: SyncState = "local";
+const syncListeners = new Set<() => void>();
+
+export function subscribeSyncState(cb: () => void): () => void {
+  syncListeners.add(cb);
+  return () => syncListeners.delete(cb);
+}
+export function getSyncState(): SyncState {
+  return syncState;
+}
+export function getServerSyncState(): SyncState {
+  return "local";
+}
+function setSyncState(s: SyncState) {
+  if (syncState !== s) {
+    syncState = s;
+    syncListeners.forEach((l) => l());
+  }
+}
+
+// --- cloud push (debounced diff of root tasks) ---
+
+let remote = false;
+const dirtyRoots = new Set<string>();
+const deletedRoots = new Set<string>();
+let catsDirty = false;
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function setJournalData(next: JournalData): boolean {
+  const prev = snapshot;
   snapshot = next;
   const ok = saveJournal(next);
-  listeners.forEach((l) => l());
+  if (remote && prev) {
+    const prevMap = new Map(prev.tasks.map((t) => [t.id, t]));
+    const nextIds = new Set(next.tasks.map((t) => t.id));
+    for (const t of next.tasks) {
+      const p = prevMap.get(t.id);
+      if (!p || JSON.stringify(p) !== JSON.stringify(t)) dirtyRoots.add(t.id);
+      deletedRoots.delete(t.id);
+    }
+    for (const id of prevMap.keys()) {
+      if (!nextIds.has(id)) {
+        deletedRoots.add(id);
+        dirtyRoots.delete(id);
+      }
+    }
+    if (JSON.stringify(prev.categories) !== JSON.stringify(next.categories)) catsDirty = true;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(flushPush, 500);
+  }
+  notify();
   return ok;
 }
 
-// --- tree helpers — subtasks are full tasks, recursively ---
+async function flushPush() {
+  const snap = snapshot;
+  if (!snap || !remote) return;
+  const upserts = snap.tasks
+    .filter((t) => dirtyRoots.has(t.id))
+    .map((t) => ({ id: t.id, payload: t, updated_at: new Date().toISOString() }));
+  const dels = [...deletedRoots];
+  const cats = catsDirty ? snap.categories : null;
+  dirtyRoots.clear();
+  deletedRoots.clear();
+  catsDirty = false;
+  if (!upserts.length && !dels.length && !cats) return;
+  setSyncState("syncing");
+  try {
+    const { supabase } = await import("./supabase");
+    if (upserts.length) {
+      const { error } = await supabase.from("journal_tasks").upsert(upserts);
+      if (error) throw error;
+    }
+    if (dels.length) {
+      const { error } = await supabase.from("journal_tasks").delete().in("id", dels);
+      if (error) throw error;
+    }
+    if (cats) {
+      const { error } = await supabase
+        .from("journal_meta")
+        .upsert({ key: "categories", payload: cats, updated_at: new Date().toISOString() });
+      if (error) throw error;
+    }
+    setSyncState("synced");
+  } catch {
+    setSyncState("error");
+  }
+}
+
+// --- initial load + realtime pull ---
+
+let syncStarted = false;
+
+export async function initJournalSync() {
+  if (syncStarted || typeof window === "undefined") return;
+  syncStarted = true;
+  try {
+    const { supabase } = await import("./supabase");
+    const cloud = await fetchCloud();
+    remote = true;
+    const local = getJournalSnapshot() ?? loadJournal();
+    const cloudEmpty = cloud.tasks.length === 0 && cloud.categories === null;
+    if (cloudEmpty && (local.tasks.length > 0 || local.categories !== DEFAULT_CATEGORIES)) {
+      // מכשיר ראשון שמתחבר: מעלה את הנתונים המקומיים לענן
+      snapshot = local;
+      local.tasks.forEach((t) => dirtyRoots.add(t.id));
+      catsDirty = true;
+      flushPush();
+    } else {
+      snapshot = {
+        categories: cloud.categories ?? DEFAULT_CATEGORIES,
+        tasks: cloud.tasks,
+      };
+      saveJournal(snapshot);
+    }
+    setSyncState("synced");
+    notify();
+
+    supabase
+      .channel("journal-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "journal_tasks" }, scheduleRefetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "journal_meta" }, scheduleRefetch)
+      .subscribe();
+  } catch {
+    remote = false;
+    setSyncState("local");
+  }
+}
+
+async function fetchCloud(): Promise<{ categories: TaskCategory[] | null; tasks: Task[] }> {
+  const { supabase } = await import("./supabase");
+  const [tasksRes, metaRes] = await Promise.all([
+    supabase.from("journal_tasks").select("id,payload"),
+    supabase.from("journal_meta").select("key,payload"),
+  ]);
+  if (tasksRes.error) throw tasksRes.error;
+  if (metaRes.error) throw metaRes.error;
+  const catsRow = (metaRes.data ?? []).find((r: { key: string }) => r.key === "categories");
+  const tasks = ((tasksRes.data ?? []) as { payload: LegacyTask }[])
+    .map((r) => normalizeTask(r.payload))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return { categories: catsRow ? (catsRow.payload as TaskCategory[]) : null, tasks };
+}
+
+let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRefetch() {
+  if (refetchTimer) clearTimeout(refetchTimer);
+  refetchTimer = setTimeout(refetchCloud, 600);
+}
+
+async function refetchCloud() {
+  // שינויים מקומיים בהמתנה — הם יידחפו ואז נקבל אירוע חדש
+  if (dirtyRoots.size || deletedRoots.size || catsDirty) return;
+  try {
+    const cloud = await fetchCloud();
+    const next: JournalData = {
+      categories: cloud.categories ?? snapshot?.categories ?? DEFAULT_CATEGORIES,
+      tasks: cloud.tasks,
+    };
+    if (JSON.stringify(next) !== JSON.stringify(snapshot)) {
+      snapshot = next;
+      saveJournal(next);
+      notify();
+    }
+  } catch {
+    /* transient */
+  }
+}
+
+// ============================================
+// tree helpers — subtasks are full tasks, recursively
+// ============================================
 
 export function updateTaskInTree(tasks: Task[], id: string, patch: Partial<Task>): Task[] {
   return tasks.map((t) => {
@@ -198,10 +397,12 @@ export function flattenTasks(tasks: Task[]): Task[] {
 
 export function countSubtasks(t: Task): { total: number; done: number } {
   const flat = flattenTasks(t.subtasks);
-  return { total: flat.length, done: flat.filter((s) => s.done).length };
+  return { total: flat.length, done: flat.filter(isDone).length };
 }
 
-// --- date helpers ---
+// ============================================
+// date helpers
+// ============================================
 
 export function toDateKey(d: Date): string {
   const y = d.getFullYear();
@@ -232,8 +433,10 @@ export const HE_MONTHS = [
 
 export const HE_WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 
+export const HE_WEEKDAYS_FULL = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
 export const CATEGORY_COLOR_CHOICES = [
-  "#2563EB", "#0EA5E9", "#06B6D4", "#14B8A6", "#10B981", "#34D399",
-  "#8B5CF6", "#D946EF", "#EC4899", "#EF4444", "#F97316", "#F59E0B",
-  "#84CC16", "#64748B", "#1E3A5F", "#0F766E",
+  "#3D7EFF", "#2E5EDB", "#0E96D2", "#0891B2", "#0FA47E", "#3C9E4E",
+  "#84A80D", "#C07F0E", "#E0662B", "#E05252", "#D6479A", "#B052E0",
+  "#7C6FE8", "#9E6BDB", "#1BA8A0", "#64748B",
 ];

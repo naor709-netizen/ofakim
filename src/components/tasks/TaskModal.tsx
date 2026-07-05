@@ -3,19 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import {
-  type Task, type TaskCategory, type TaskFile, type TaskNature,
-  emptyTask, uid, updateTaskInTree, removeTaskFromTree, countSubtasks,
+  type Task, type TaskCategory, type TaskFile, type TaskNature, type TaskStatus,
+  emptyTask, uid, isDone, updateTaskInTree, removeTaskFromTree, countSubtasks,
   formatDateHe, formatDateTimeHe,
-  NATURE_LABELS, NATURE_COLORS, CATEGORY_COLOR_CHOICES,
+  NATURE_LABELS, NATURE_COLORS, STATUS_LABELS, STATUS_COLORS, CATEGORY_COLOR_CHOICES,
 } from "@/lib/tasks";
-
-const TJ = {
-  blue: "#2563EB", blueD: "#1E40AF", sky: "#0EA5E9", mint: "#14B8A6",
-  mintL: "#CCFBF1", blueL: "#DBEAFE",
-  grad: "linear-gradient(120deg, #2563EB 0%, #0EA5E9 48%, #14B8A6 100%)",
-  bg: "#F2F8F9", ink: "#0F2540", ink2: "#4A6076",
-  line: "rgba(15,37,64,0.10)", danger: "#EF4444",
-};
+import { T, chip, inputStyle, Ic, StatusIcon } from "./ui";
 
 const MAX_FILE_BYTES = 1.5 * 1024 * 1024;
 
@@ -52,7 +45,6 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
   const [path, setPath] = useState<string[]>(() => pathToTask(root, focusId) ?? [root.id]);
   const [dirty, setDirty] = useState(false);
 
-  // new category inline
   const [addingCat, setAddingCat] = useState(false);
   const [catName, setCatName] = useState("");
   const [catColor, setCatColor] = useState(CATEGORY_COLOR_CHOICES[0]);
@@ -76,15 +68,22 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
     setDirty(true);
   }
 
-  function save(close = true) {
+  function setStatus(s: TaskStatus) {
+    patch({
+      status: s,
+      endDate: s === "done" && !current.endDate ? new Date().toISOString().slice(0, 10) : current.endDate,
+    });
+  }
+
+  function save() {
     if (!draft.title.trim()) {
       toast("למשימה חייב להיות שם", "error");
       return;
     }
     onSave(draft);
     setDirty(false);
-    toast("נשמר ✓", "success");
-    if (close) onClose();
+    toast("נשמר", "success");
+    onClose();
   }
 
   function addSubtask() {
@@ -146,36 +145,37 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,37,64,0.45)",
-        backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 14,
+        position: "fixed", inset: 0, zIndex: 100, background: "rgba(4,9,18,0.72)",
+        backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 14,
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className="modal-mobile-full"
         style={{
-          background: "#fff", borderRadius: 22, width: "100%", maxWidth: 680,
+          background: T.surface, borderRadius: 18, width: "100%", maxWidth: 680,
           maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden",
-          boxShadow: "0 20px 60px rgba(15,37,64,0.3)", color: TJ.ink,
+          border: `1px solid ${T.lineStrong}`, color: T.ink,
+          boxShadow: "0 24px 70px rgba(0,0,0,0.55)",
         }}
       >
         {/* header */}
-        <div style={{ background: TJ.grad, color: "#fff", padding: "16px 20px", flexShrink: 0 }}>
-          {/* breadcrumb */}
+        <div style={{ padding: "16px 20px 14px", borderBottom: `1px solid ${T.line}`, flexShrink: 0, position: "relative" }}>
+          <div style={{ position: "absolute", top: 0, insetInline: 0, height: 2.5, background: T.grad }} />
           {path.length > 1 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 8, fontSize: 11.5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 10, fontSize: 11.5 }}>
               {breadcrumbTasks.map((t, i) => (
                 <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  {i > 0 && <span style={{ opacity: 0.6 }}>‹</span>}
+                  {i > 0 && <span style={{ color: T.ink3, display: "inline-flex" }}>{Ic.chevL(10)}</span>}
                   {i < breadcrumbTasks.length - 1 ? (
                     <button onClick={() => setPath(path.slice(0, i + 1))} style={{
-                      background: "rgba(255,255,255,0.18)", border: "none", color: "#fff",
-                      borderRadius: 99, padding: "2px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit",
+                      background: T.surface2, border: "none", color: T.ink2,
+                      borderRadius: 99, padding: "3px 11px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
                     }}>
                       {t.title || "ללא שם"}
                     </button>
                   ) : (
-                    <span style={{ fontWeight: 700, padding: "2px 4px" }}>{t.title || "שלב חדש"}</span>
+                    <span style={{ fontWeight: 600, color: T.ink2, padding: "3px 4px", fontSize: 11 }}>{t.title || "שלב חדש"}</span>
                   )}
                 </span>
               ))}
@@ -190,102 +190,111 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
                 autoFocus={!current.title}
                 style={{
                   width: "100%", background: "transparent", border: "none", outline: "none",
-                  color: "#fff", fontSize: 21, fontWeight: 700, fontFamily: "var(--font-display)",
-                  borderBottom: "1.5px dashed rgba(255,255,255,0.4)", paddingBottom: 4,
+                  color: T.ink, fontSize: 19, fontWeight: 700, fontFamily: "var(--font-display)",
+                  borderBottom: `1px dashed ${T.lineStrong}`, paddingBottom: 5,
                 }}
               />
-              <div className="num" style={{ fontSize: 11.5, marginTop: 7, opacity: 0.92 }}>
-                🗓 נפתחה ב־{formatDateHe(current.createdAt)}
-                {current.critical && <span style={{ marginInlineStart: 10 }}>🔥 קריטית</span>}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, fontSize: 11, color: T.ink3 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  {Ic.calendar(12)} <span className="num">נפתחה ב־{formatDateHe(current.createdAt)}</span>
+                </span>
+                {current.critical && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: T.danger }}>
+                    {Ic.flame(12)} קריטית
+                  </span>
+                )}
               </div>
             </div>
             <button onClick={onClose} title="סגירה" style={{
-              background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
-              width: 32, height: 32, borderRadius: 10, cursor: "pointer", fontSize: 15, flexShrink: 0,
-            }}>✕</button>
+              background: T.surface2, border: "none", color: T.ink2,
+              width: 30, height: 30, borderRadius: 9, cursor: "pointer", flexShrink: 0,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>{Ic.x(14)}</button>
           </div>
         </div>
 
         {/* body */}
-        <div style={{ overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16, background: T.bg2 }}>
 
           {/* status + flags */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <button onClick={() => patch({ done: !current.done, endDate: !current.done && !current.endDate ? new Date().toISOString().slice(0, 10) : current.endDate })} style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              background: current.done ? TJ.mintL : "#fff", color: current.done ? "#0F766E" : TJ.ink2,
-              border: `1px solid ${current.done ? TJ.mint : TJ.line}`,
-              borderRadius: 99, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}>
-              {current.done ? "✓ הושלמה" : "○ סימון כהושלמה"}
-            </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "inline-flex", gap: 2, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, padding: 3 }}>
+              {(Object.keys(STATUS_LABELS) as TaskStatus[]).map((s) => {
+                const active = current.status === s;
+                return (
+                  <button key={s} onClick={() => setStatus(s)} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    background: active ? `${STATUS_COLORS[s]}22` : "transparent",
+                    color: active ? STATUS_COLORS[s] : T.ink3,
+                    border: "none", borderRadius: 8, padding: "6px 13px",
+                    fontSize: 12, fontWeight: active ? 700 : 400, cursor: "pointer", fontFamily: "inherit",
+                  }}>
+                    <StatusIcon status={s} size={13} />
+                    {STATUS_LABELS[s]}
+                  </button>
+                );
+              })}
+            </div>
             <button onClick={() => patch({ critical: !current.critical })} style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              background: current.critical ? "#FEE2E2" : "#fff", color: current.critical ? "#B91C1C" : TJ.ink2,
-              border: `1px solid ${current.critical ? "#FCA5A5" : TJ.line}`,
-              borderRadius: 99, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              ...chip(T.danger, current.critical),
+              padding: "7px 14px",
             }}>
-              🔥 {current.critical ? "קריטית" : "סימון כקריטית"}
+              {Ic.flame(13)} {current.critical ? "קריטית" : "סימון כקריטית"}
             </button>
-            {/* nature: אישי / דחוף / שוטף */}
-            <div style={{ display: "inline-flex", gap: 5, marginInlineStart: "auto" }}>
+          </div>
+
+          {/* nature */}
+          <Field label="מהות" icon={Ic.flag(13)}>
+            <div style={{ display: "inline-flex", gap: 6 }}>
               {(Object.keys(NATURE_LABELS) as TaskNature[]).map((n) => {
                 const active = current.nature === n;
                 return (
-                  <button key={n} onClick={() => patch({ nature: active ? null : n })} style={{
-                    borderRadius: 99, padding: "6px 14px", fontSize: 12, cursor: "pointer",
-                    border: `1px solid ${active ? NATURE_COLORS[n] : TJ.line}`,
-                    background: active ? `${NATURE_COLORS[n]}1A` : "#fff",
-                    color: active ? NATURE_COLORS[n] : TJ.ink2, fontWeight: active ? 700 : 400,
-                  }}>
+                  <button key={n} onClick={() => patch({ nature: active ? null : n })}
+                    style={chip(NATURE_COLORS[n], active)}>
                     {NATURE_LABELS[n]}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </Field>
 
           {/* category */}
-          <Field label="קטגוריה">
+          <Field label="קטגוריה" icon={Ic.layers(13)}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               {categories.map((c) => {
                 const active = current.categoryId === c.id;
                 return (
-                  <button key={c.id} onClick={() => patch({ categoryId: active ? null : c.id })} style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    borderRadius: 99, padding: "6px 13px", fontSize: 12.5, cursor: "pointer",
-                    border: `1px solid ${active ? c.color : TJ.line}`,
-                    background: active ? `${c.color}1A` : "#fff",
-                    color: active ? c.color : TJ.ink2, fontWeight: active ? 700 : 400,
-                  }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} />
+                  <button key={c.id} onClick={() => patch({ categoryId: active ? null : c.id })}
+                    style={chip(c.color, active)}>
+                    <span style={{ width: 8, height: 8, borderRadius: 3, background: c.color }} />
                     {c.name}
                   </button>
                 );
               })}
               <button onClick={() => setAddingCat((v) => !v)} style={{
-                borderRadius: 99, padding: "6px 13px", fontSize: 12.5, cursor: "pointer",
-                border: `1px dashed ${TJ.line}`, background: "transparent", color: TJ.ink2,
-              }}>＋ חדשה</button>
+                ...chip(T.ink2, false), borderStyle: "dashed",
+              }}>{Ic.plus(11)} חדשה</button>
             </div>
             {addingCat && (
-              <div style={{ marginTop: 8, background: TJ.bg, borderRadius: 12, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                <input className="f-input" placeholder="שם הקטגוריה" value={catName}
+              <div style={{ marginTop: 8, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 11, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                <input placeholder="שם הקטגוריה" value={catName}
                   onChange={(e) => setCatName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") submitNewCategory(); }}
-                  style={{ padding: "7px 10px", fontSize: 12 }} />
+                  style={{ ...inputStyle, padding: "7px 10px", fontSize: 12 }} />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
                   {CATEGORY_COLOR_CHOICES.map((col) => (
                     <button key={col} onClick={() => setCatColor(col)} style={{
-                      width: 20, height: 20, borderRadius: 7, background: col, cursor: "pointer",
-                      border: catColor === col ? "2px solid #0F2540" : "2px solid transparent",
+                      width: 18, height: 18, borderRadius: 6, background: col, cursor: "pointer", border: "none",
+                      outline: catColor === col ? `2px solid ${T.ink}` : "none", outlineOffset: 1,
                     }} />
                   ))}
                   <input type="color" value={catColor} onChange={(e) => setCatColor(e.target.value)} title="צבע חופשי"
-                    style={{ width: 20, height: 20, padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
+                    style={{ width: 18, height: 18, padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
                   <button onClick={submitNewCategory} disabled={!catName.trim()} style={{
-                    marginInlineStart: "auto", background: catName.trim() ? TJ.grad : "#D8E4E6", color: "#fff",
-                    border: "none", borderRadius: 9, padding: "6px 16px", fontSize: 12, fontWeight: 600,
+                    marginInlineStart: "auto", border: "none", borderRadius: 8, padding: "6px 16px",
+                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    background: catName.trim() ? T.accentSoft : T.bg2,
+                    color: catName.trim() ? T.accent : T.ink3,
                     cursor: catName.trim() ? "pointer" : "default",
                   }}>הוספה</button>
                 </div>
@@ -294,54 +303,57 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
           </Field>
 
           {/* description */}
-          <Field label="מהות המשימה">
+          <Field label="מהות המשימה" icon={Ic.note(13)}>
             <textarea
-              className="f-input" rows={2} value={current.description}
+              rows={2} value={current.description}
               onChange={(e) => patch({ description: e.target.value })}
               placeholder="מה צריך לעשות?"
-              style={{ width: "100%", resize: "vertical", fontFamily: "inherit" }}
+              style={{ ...inputStyle, width: "100%", resize: "vertical" }}
             />
           </Field>
 
           {/* dates */}
           <div className="tj-dates" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="🎯 תאריך יעד (מוצג בלוח השנה)">
-              <input type="date" className="f-input" value={current.dueDate ?? ""}
-                onChange={(e) => patch({ dueDate: e.target.value || null })} style={{ width: "100%", minWidth: 0 }} />
+            <Field label="תאריך יעד (מוצג בלוח השנה)" icon={Ic.target(13)}>
+              <input type="date" value={current.dueDate ?? ""}
+                onChange={(e) => patch({ dueDate: e.target.value || null })}
+                style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
             </Field>
-            <Field label="🏁 תאריך סיום">
-              <input type="date" className="f-input" value={current.endDate ?? ""}
-                onChange={(e) => patch({ endDate: e.target.value || null })} style={{ width: "100%", minWidth: 0 }} />
+            <Field label="תאריך סיום" icon={Ic.flag(13)}>
+              <input type="date" value={current.endDate ?? ""}
+                onChange={(e) => patch({ endDate: e.target.value || null })}
+                style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
             </Field>
           </div>
           <style>{`@media (max-width: 560px) { .tj-dates { grid-template-columns: 1fr !important; } }`}</style>
 
           {/* reminders */}
-          <Field label="⏰ תזכורות">
+          <Field label="תזכורות" icon={Ic.clock(13)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {current.reminders.map((r) => (
                 <div key={r.id} style={{
                   display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap",
-                  background: r.fired ? "#F1F5F9" : TJ.mintL, borderRadius: 10, padding: "7px 9px",
+                  background: T.surface, border: `1px solid ${r.fired ? T.line : `${T.mint}44`}`,
+                  borderRadius: 10, padding: "7px 9px",
                 }}>
                   <input
-                    type="datetime-local" className="f-input" value={r.datetime.slice(0, 16)}
+                    type="datetime-local" value={r.datetime.slice(0, 16)}
                     onChange={(e) => patch({
                       reminders: current.reminders.map((x) => x.id === r.id ? { ...x, datetime: e.target.value, fired: false } : x),
                     })}
-                    style={{ padding: "5px 8px", fontSize: 12, background: "#fff" }}
+                    style={{ ...inputStyle, padding: "5px 8px", fontSize: 12 }}
                   />
                   <input
-                    className="f-input" placeholder="הערה לתזכורת (לא חובה)" value={r.note}
+                    placeholder="הערה לתזכורת (לא חובה)" value={r.note}
                     onChange={(e) => patch({
                       reminders: current.reminders.map((x) => x.id === r.id ? { ...x, note: e.target.value } : x),
                     })}
-                    style={{ flex: 1, minWidth: 120, padding: "5px 8px", fontSize: 12, background: "#fff" }}
+                    style={{ ...inputStyle, flex: 1, minWidth: 110, padding: "5px 8px", fontSize: 12 }}
                   />
-                  {r.fired && <span className="tag" style={{ fontSize: 10 }}>נשלחה</span>}
+                  {r.fired && <span style={{ fontSize: 10, color: T.ink3 }}>נשלחה</span>}
                   <button onClick={() => patch({ reminders: current.reminders.filter((x) => x.id !== r.id) })} style={{
-                    background: "transparent", border: "none", color: TJ.danger, cursor: "pointer", fontSize: 13,
-                  }}>✕</button>
+                    background: "transparent", border: "none", color: T.danger, cursor: "pointer", display: "inline-flex",
+                  }}>{Ic.x(12)}</button>
                 </div>
               ))}
               <button onClick={() => {
@@ -349,146 +361,153 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
                 dt.setSeconds(0, 0);
                 const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                 patch({ reminders: [...current.reminders, { id: uid(), datetime: local, note: "", fired: false }] });
-              }} style={{
-                alignSelf: "flex-start", background: "#fff", border: `1px dashed ${TJ.line}`,
-                borderRadius: 10, padding: "7px 14px", fontSize: 12, color: TJ.blueD, cursor: "pointer", fontWeight: 600,
-              }}>
-                ＋ הוספת תזכורת
+              }} style={addBtnStyle}>
+                {Ic.plus(12)} הוספת תזכורת
               </button>
             </div>
           </Field>
 
           {/* notes */}
-          <Field label="📝 הערות">
+          <Field label="הערות" icon={Ic.pencil(13)}>
             <textarea
-              className="f-input" rows={3} value={current.notes}
+              rows={3} value={current.notes}
               onChange={(e) => patch({ notes: e.target.value })}
               placeholder="הערות חופשיות…"
-              style={{ width: "100%", resize: "vertical", fontFamily: "inherit" }}
+              style={{ ...inputStyle, width: "100%", resize: "vertical" }}
             />
           </Field>
 
           {/* files */}
-          <Field label="📎 קבצים מצורפים">
+          <Field label="קבצים מצורפים" icon={Ic.clip(13)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {current.files.map((f) => (
                 <div key={f.id} style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  background: TJ.bg, borderRadius: 10, padding: "7px 10px",
+                  display: "flex", alignItems: "center", gap: 9,
+                  background: T.surface, border: `1px solid ${T.line}`, borderRadius: 10, padding: "7px 10px",
                 }}>
-                  <span style={{ fontSize: 15 }}>{f.type.startsWith("image/") ? "🖼" : "📄"}</span>
+                  <span style={{ color: T.ink3, display: "inline-flex" }}>{Ic.clip(13)}</span>
                   <a href={f.dataUrl} download={f.name} style={{
-                    flex: 1, minWidth: 0, fontSize: 12.5, color: TJ.blueD, textDecoration: "none",
-                    fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    flex: 1, minWidth: 0, fontSize: 12.5, color: T.accent, textDecoration: "none",
+                    fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     {f.name}
                   </a>
-                  <span className="num" style={{ fontSize: 10.5, color: TJ.ink2 }}>{(f.size / 1024).toFixed(0)}KB</span>
+                  <span className="num" style={{ fontSize: 10.5, color: T.ink3 }}>{(f.size / 1024).toFixed(0)}KB</span>
                   <button onClick={() => patch({ files: current.files.filter((x) => x.id !== f.id) })} style={{
-                    background: "transparent", border: "none", color: TJ.danger, cursor: "pointer", fontSize: 13,
-                  }}>✕</button>
+                    background: "transparent", border: "none", color: T.danger, cursor: "pointer", display: "inline-flex",
+                  }}>{Ic.x(12)}</button>
                 </div>
               ))}
               <input ref={fileInputRef} type="file" multiple style={{ display: "none" }}
                 onChange={(e) => handleFiles(e.target.files)} />
-              <button onClick={() => fileInputRef.current?.click()} style={{
-                alignSelf: "flex-start", background: "#fff", border: `1px dashed ${TJ.line}`,
-                borderRadius: 10, padding: "7px 14px", fontSize: 12, color: TJ.blueD, cursor: "pointer", fontWeight: 600,
-              }}>
-                ＋ צירוף קובץ
+              <button onClick={() => fileInputRef.current?.click()} style={addBtnStyle}>
+                {Ic.plus(12)} צירוף קובץ
               </button>
             </div>
           </Field>
 
           {/* subtasks */}
-          <Field label={`🪜 שלבים (${countSubtasks(current).done}/${countSubtasks(current).total})`}>
+          <Field label={`שלבים (${countSubtasks(current).done}/${countSubtasks(current).total})`} icon={Ic.layers(13)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {current.subtasks.map((s) => {
                 const sc = countSubtasks(s);
+                const sDone = isDone(s);
                 return (
                   <div key={s.id}
                     onClick={() => setPath((p) => [...p, s.id])}
                     style={{
                       display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-                      background: "#fff", border: `0.5px solid ${TJ.line}`,
-                      borderInlineStart: `4px solid ${s.critical ? TJ.danger : TJ.mint}`,
-                      borderRadius: 12, padding: "9px 11px", opacity: s.done ? 0.6 : 1,
+                      background: T.surface, border: `1px solid ${T.line}`,
+                      borderInlineStart: `3px solid ${s.critical ? T.danger : T.mint}`,
+                      borderRadius: 11, padding: "9px 11px", opacity: sDone ? 0.55 : 1,
                     }}>
-                    <input type="checkbox" checked={s.done}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => {
-                        setDraft((d) => ({ ...d, subtasks: updateTaskInTree(d.subtasks, s.id, { done: !s.done }) }));
+                    <button
+                      title="קידום סטטוס"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const order: TaskStatus[] = ["todo", "in_progress", "done"];
+                        const nextS = order[(order.indexOf(s.status) + 1) % 3];
+                        setDraft((d) => ({
+                          ...d,
+                          subtasks: updateTaskInTree(d.subtasks, s.id, {
+                            status: nextS,
+                            endDate: nextS === "done" && !s.endDate ? new Date().toISOString().slice(0, 10) : s.endDate,
+                          }),
+                        }));
                         setDirty(true);
                       }}
-                      style={{ width: 16, height: 16, accentColor: TJ.mint, cursor: "pointer" }} />
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: STATUS_COLORS[s.status], display: "inline-flex", flexShrink: 0 }}>
+                      <StatusIcon status={s.status} size={15} />
+                    </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, textDecoration: s.done ? "line-through" : "none" }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: T.ink, textDecoration: sDone ? "line-through" : "none" }}>
                           {s.title || "ללא שם"}
                         </span>
-                        <span className="num" style={{ fontSize: 10, color: TJ.ink2 }}>נפתחה {formatDateHe(s.createdAt)}</span>
+                        <span className="num" style={{ fontSize: 9.5, color: T.ink3 }}>נפתחה {formatDateHe(s.createdAt)}</span>
                       </div>
-                      <div style={{ display: "flex", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
-                        {s.critical && <span className="tag danger" style={{ fontSize: 9.5 }}>🔥</span>}
-                        {s.nature && <span className="tag" style={{ fontSize: 9.5, color: NATURE_COLORS[s.nature] }}>{NATURE_LABELS[s.nature]}</span>}
-                        {s.dueDate && <span className="tag num" style={{ fontSize: 9.5 }}>🎯 {formatDateHe(s.dueDate)}</span>}
-                        {s.files.length > 0 && <span className="tag" style={{ fontSize: 9.5 }}>📎 {s.files.length}</span>}
-                        {sc.total > 0 && <span className="tag num" style={{ fontSize: 9.5 }}>{sc.done}/{sc.total} שלבים</span>}
+                      <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}>
+                        {s.critical && <span style={{ color: T.danger, display: "inline-flex" }}>{Ic.flame(10)}</span>}
+                        {s.nature && <span style={{ fontSize: 9.5, color: NATURE_COLORS[s.nature] }}>{NATURE_LABELS[s.nature]}</span>}
+                        {s.dueDate && <span className="num" style={{ fontSize: 9.5, color: T.ink3, display: "inline-flex", alignItems: "center", gap: 3 }}>{Ic.target(9)} {formatDateHe(s.dueDate)}</span>}
+                        {s.files.length > 0 && <span className="num" style={{ fontSize: 9.5, color: T.ink3, display: "inline-flex", alignItems: "center", gap: 3 }}>{Ic.clip(9)} {s.files.length}</span>}
+                        {sc.total > 0 && <span className="num" style={{ fontSize: 9.5, color: T.ink3 }}>{sc.done}/{sc.total} שלבים</span>}
                       </div>
                     </div>
-                    <span style={{ color: TJ.ink2, opacity: 0.5 }}>‹</span>
+                    <span style={{ color: T.ink3, opacity: 0.6, display: "inline-flex" }}>{Ic.chevL(13)}</span>
                   </div>
                 );
               })}
-              <button onClick={addSubtask} style={{
-                alignSelf: "flex-start", background: TJ.blueL, border: "none",
-                borderRadius: 10, padding: "8px 16px", fontSize: 12.5, color: TJ.blueD, cursor: "pointer", fontWeight: 700,
-              }}>
-                ＋ הוספת שלב
+              <button onClick={addSubtask} style={{ ...addBtnStyle, color: T.accent, borderColor: `${T.accent}55`, background: T.accentSoft }}>
+                {Ic.plus(12)} הוספת שלב
               </button>
-              <div style={{ fontSize: 10.5, color: TJ.ink2 }}>
+              <div style={{ fontSize: 10.5, color: T.ink3 }}>
                 לכל שלב יש את כל המאפיינים של משימה — קטגוריה, תאריכים, תזכורות, הערות, קבצים ותתי-שלבים.
               </div>
             </div>
           </Field>
 
-          {/* completion info */}
-          {current.done && current.endDate && (
-            <div style={{ fontSize: 12, color: "#0F766E", background: TJ.mintL, borderRadius: 10, padding: "8px 12px" }}>
-              ✓ הושלמה · תאריך סיום {formatDateHe(current.endDate)} · נפתחה {formatDateTimeHe(current.createdAt)}
+          {isDone(current) && current.endDate && (
+            <div style={{
+              fontSize: 12, color: T.mint, background: T.mintSoft, borderRadius: 10, padding: "8px 12px",
+              display: "flex", alignItems: "center", gap: 7,
+            }}>
+              {Ic.check(13)} הושלמה · תאריך סיום {formatDateHe(current.endDate)} · נפתחה {formatDateTimeHe(current.createdAt)}
             </div>
           )}
         </div>
 
         {/* footer */}
         <div style={{
-          flexShrink: 0, borderTop: `0.5px solid ${TJ.line}`, padding: "12px 20px",
-          display: "flex", alignItems: "center", gap: 8, background: "#FBFDFE",
+          flexShrink: 0, borderTop: `1px solid ${T.line}`, padding: "12px 20px",
+          display: "flex", alignItems: "center", gap: 8, background: T.surface,
         }}>
           <button onClick={deleteCurrent} style={{
-            background: "transparent", border: `1px solid #FCA5A5`, color: "#B91C1C",
-            borderRadius: 11, padding: "9px 16px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: "transparent", border: `1px solid ${T.danger}55`, color: T.danger,
+            borderRadius: 10, padding: "8px 14px", fontSize: 12.5, cursor: "pointer", fontWeight: 500, fontFamily: "inherit",
           }}>
-            {isRoot ? "מחיקת משימה" : "מחיקת שלב"}
+            {Ic.trash(13)} {isRoot ? "מחיקת משימה" : "מחיקת שלב"}
           </button>
           {!isRoot && (
             <button onClick={() => setPath((p) => p.slice(0, -1))} style={{
-              background: "#fff", border: `0.5px solid ${TJ.line}`, color: TJ.ink2,
-              borderRadius: 11, padding: "9px 16px", fontSize: 13, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "transparent", border: `1px solid ${T.line}`, color: T.ink2,
+              borderRadius: 10, padding: "8px 14px", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit",
             }}>
-              ‹ חזרה למשימה
+              {Ic.chevR(12)} חזרה למשימה
             </button>
           )}
           <div style={{ marginInlineStart: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            {dirty && <span style={{ fontSize: 11, color: TJ.ink2 }}>יש שינויים שלא נשמרו</span>}
+            {dirty && <span style={{ fontSize: 10.5, color: T.ink3 }}>שינויים שלא נשמרו</span>}
             <button onClick={onClose} style={{
-              background: "#fff", border: `0.5px solid ${TJ.line}`, color: TJ.ink2,
-              borderRadius: 11, padding: "9px 18px", fontSize: 13, cursor: "pointer",
+              background: "transparent", border: `1px solid ${T.line}`, color: T.ink2,
+              borderRadius: 10, padding: "8px 16px", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit",
             }}>ביטול</button>
-            <button onClick={() => save(true)} style={{
-              background: TJ.grad, border: "none", color: "#fff",
-              borderRadius: 11, padding: "9px 26px", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
-              boxShadow: "0 3px 12px rgba(37,99,235,0.35)",
+            <button onClick={save} style={{
+              background: T.grad, border: "none", color: "#06121F",
+              borderRadius: 10, padding: "8px 26px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+              fontFamily: "var(--font-display)",
             }}>שמירה</button>
           </div>
         </div>
@@ -497,10 +516,23 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const addBtnStyle: React.CSSProperties = {
+  alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 6,
+  background: "transparent", border: `1px dashed ${T.lineStrong}`,
+  borderRadius: 9, padding: "7px 14px", fontSize: 12, color: T.ink2, cursor: "pointer",
+  fontWeight: 500, fontFamily: "inherit",
+};
+
+function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#0F2540", marginBottom: 7 }}>{label}</div>
+      <div style={{
+        fontSize: 11, fontWeight: 600, color: T.ink2, marginBottom: 7,
+        display: "flex", alignItems: "center", gap: 5,
+      }}>
+        {icon && <span style={{ color: T.ink3, display: "inline-flex" }}>{icon}</span>}
+        {label}
+      </div>
       {children}
     </div>
   );

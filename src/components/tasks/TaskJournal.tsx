@@ -4,44 +4,40 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useToast } from "@/components/Toast";
 import {
-  type JournalData, type Task, type TaskCategory, type TaskNature,
+  type JournalData, type Task, type TaskCategory, type TaskNature, type TaskStatus,
   subscribeJournal, getJournalSnapshot, getServerJournalSnapshot, setJournalData,
-  emptyTask, uid,
+  subscribeSyncState, getSyncState, getServerSyncState, initJournalSync,
+  emptyTask, uid, isDone,
   replaceTaskInTree, removeTaskFromTree, flattenTasks, countSubtasks,
   toDateKey, formatDateHe,
-  NATURE_LABELS, NATURE_COLORS, HE_MONTHS, HE_WEEKDAYS, CATEGORY_COLOR_CHOICES,
+  NATURE_LABELS, NATURE_COLORS, STATUS_LABELS, STATUS_COLORS,
+  HE_MONTHS, HE_WEEKDAYS, CATEGORY_COLOR_CHOICES,
 } from "@/lib/tasks";
+import { T, card, chip, inputStyle, Ic, StatusIcon } from "./ui";
 import { TaskModal } from "./TaskModal";
+import { WeekView, TableView, BoardView, StatsView } from "./views";
 
-// blue–mint palette
-const TJ = {
-  blue: "#2563EB",
-  blueD: "#1E40AF",
-  sky: "#0EA5E9",
-  mint: "#14B8A6",
-  mintL: "#CCFBF1",
-  blueL: "#DBEAFE",
-  grad: "linear-gradient(120deg, #2563EB 0%, #0EA5E9 48%, #14B8A6 100%)",
-  bg: "#F2F8F9",
-  ink: "#0F2540",
-  ink2: "#4A6076",
-  line: "rgba(15,37,64,0.10)",
-  danger: "#EF4444",
-};
+type ViewKey = "dashboard" | "week" | "table" | "board" | "stats";
 
-const card: React.CSSProperties = {
-  background: "#fff", borderRadius: 18, border: `0.5px solid ${TJ.line}`,
-  boxShadow: "0 2px 12px rgba(15,37,64,0.05)",
-};
+const VIEWS: { key: ViewKey; label: string; icon: (s?: number) => React.ReactNode }[] = [
+  { key: "dashboard", label: "דשבורד", icon: Ic.grid },
+  { key: "week", label: "השבוע", icon: Ic.week },
+  { key: "table", label: "טבלה", icon: Ic.table },
+  { key: "board", label: "קנבן", icon: Ic.board },
+  { key: "stats", label: "אנליטיקות", icon: Ic.chart },
+];
 
 export default function TaskJournal() {
   const { toast } = useToast();
   const journal = useSyncExternalStore(subscribeJournal, getJournalSnapshot, getServerJournalSnapshot);
+  const syncState = useSyncExternalStore(subscribeSyncState, getSyncState, getServerSyncState);
+
+  const [view, setView] = useState<ViewKey>("dashboard");
 
   // filters
   const [catFilter, setCatFilter] = useState<Set<string>>(new Set());
   const [natureFilter, setNatureFilter] = useState<Set<TaskNature>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "done">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "done">("all");
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -49,21 +45,22 @@ export default function TaskJournal() {
   // calendar
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
-  const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-11
+  const [calMonth, setCalMonth] = useState(today.getMonth());
 
-  // modal
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // sidebar: add category
+  // add category (sidebar)
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState(CATEGORY_COLOR_CHOICES[0]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => { initJournalSync(); }, []);
 
   function persist(next: JournalData) {
     if (!setJournalData(next)) toast("השמירה נכשלה — ייתכן שהקבצים המצורפים גדולים מדי", "error");
   }
 
-  // ---- reminders: browser notifications while the journal is open ----
+  // ---- reminders loop ----
   const [nowTick, setNowTick] = useState(0);
   useEffect(() => {
     function check() {
@@ -87,9 +84,9 @@ export default function TaskJournal() {
             };
             tasks = replaceTaskInTree(tasks, updated);
             const body = r.note || t.title;
-            toast(`⏰ תזכורת: ${body}`, "info");
+            toast(`תזכורת: ${body}`, "info");
             if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-              new Notification("יומן המשימות של אופיר", { body: `⏰ ${body}` });
+              new Notification("יומן המשימות של אופיר", { body });
             }
           }
         }
@@ -113,8 +110,8 @@ export default function TaskJournal() {
     return (journal?.tasks ?? []).filter((t) => {
       if (catFilter.size > 0 && !(t.categoryId && catFilter.has(t.categoryId))) return false;
       if (natureFilter.size > 0 && !(t.nature && natureFilter.has(t.nature))) return false;
-      if (statusFilter === "open" && t.done) return false;
-      if (statusFilter === "done" && !t.done) return false;
+      if (statusFilter === "active" && isDone(t)) return false;
+      if (statusFilter === "done" && !isDone(t)) return false;
       if (criticalOnly && !t.critical) return false;
       if (q) {
         const inTree = [t, ...flattenTasks(t.subtasks)].some(
@@ -127,14 +124,15 @@ export default function TaskJournal() {
     });
   }, [journal, catFilter, natureFilter, statusFilter, criticalOnly, search, selectedDate]);
 
-  const criticalTasks = filteredTasks.filter((t) => t.critical && !t.done);
-  const regularTasks = filteredTasks.filter((t) => !(t.critical && !t.done));
+  const criticalTasks = filteredTasks.filter((t) => t.critical && !isDone(t));
+  const regularTasks = filteredTasks.filter((t) => !(t.critical && !isDone(t)));
 
   const allFlat = useMemo(() => flattenTasks(journal?.tasks ?? []), [journal]);
-  const openCount = allFlat.filter((t) => !t.done).length;
-  const criticalCount = allFlat.filter((t) => t.critical && !t.done).length;
   const todayKey = toDateKey(today);
-  const dueTodayCount = allFlat.filter((t) => !t.done && t.dueDate === todayKey).length;
+  const openCount = allFlat.filter((t) => !isDone(t)).length;
+  const inProgressCount = allFlat.filter((t) => t.status === "in_progress").length;
+  const criticalCount = allFlat.filter((t) => t.critical && !isDone(t)).length;
+  const overdueCount = allFlat.filter((t) => !isDone(t) && t.dueDate && t.dueDate < todayKey).length;
 
   const upcomingReminders = useMemo(() => {
     if (!nowTick) return [];
@@ -145,7 +143,6 @@ export default function TaskJournal() {
       .slice(0, 5);
   }, [allFlat, nowTick]);
 
-  // tasks (incl. subtasks) with a due date, for the calendar — respecting filters on top-level
   const calendarItems = useMemo(() => {
     const map: Record<string, Task[]> = {};
     for (const root of filteredTasks) {
@@ -199,207 +196,261 @@ export default function TaskJournal() {
     toast("המשימה נמחקה", "info");
   }
 
-  function toggleDone(t: Task) {
-    saveTask({ ...t, done: !t.done, endDate: !t.done ? (t.endDate ?? todayKey) : t.endDate });
+  function setTaskStatus(t: Task, status: TaskStatus) {
+    saveTask({
+      ...t,
+      status,
+      endDate: status === "done" ? (t.endDate ?? todayKey) : t.endDate,
+    });
   }
 
-  function toggleSet<T>(set: Set<T>, v: T, setter: (s: Set<T>) => void) {
+  function cycleStatus(t: Task) {
+    const order: TaskStatus[] = ["todo", "in_progress", "done"];
+    setTaskStatus(t, order[(order.indexOf(t.status) + 1) % 3]);
+  }
+
+  function toggleSet<V>(set: Set<V>, v: V, setter: (s: Set<V>) => void) {
     const n = new Set(set);
     if (n.has(v)) n.delete(v); else n.add(v);
     setter(n);
   }
 
-  // the modal edits a ROOT task tree; find the root containing openTaskId
   const openRoot = openTaskId && journal
     ? journal.tasks.find((root) => [root, ...flattenTasks(root.subtasks)].some((t) => t.id === openTaskId)) ?? null
     : null;
 
   const filtersActive = catFilter.size > 0 || natureFilter.size > 0 || statusFilter !== "all" || criticalOnly || !!search.trim() || !!selectedDate;
 
+  const sync = {
+    local:   { icon: Ic.cloudOff(13), label: "מקומי בלבד", color: T.ink3 },
+    syncing: { icon: Ic.cloud(13),    label: "מסנכרן…",    color: T.amber },
+    synced:  { icon: Ic.cloud(13),    label: "מסונכרן",    color: T.mint },
+    error:   { icon: Ic.alert(13),    label: "שגיאת סנכרון", color: T.danger },
+  }[syncState];
+
   if (!journal) {
     return (
-      <div style={{ minHeight: "100vh", background: TJ.bg }}>
-        <HistadrutHeader />
+      <div style={{ minHeight: "100vh", background: T.bg }}>
+        <Header sync={sync} />
         <div style={{ padding: 40, display: "grid", gap: 12 }}>
-          <div className="skeleton" style={{ height: 120, borderRadius: 18 }} />
-          <div className="skeleton" style={{ height: 340, borderRadius: 18 }} />
+          <div style={{ height: 110, borderRadius: 16, background: T.surface }} />
+          <div style={{ height: 340, borderRadius: 16, background: T.surface }} />
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: TJ.bg, color: TJ.ink }}>
-      <HistadrutHeader />
+    <div style={{ minHeight: "100vh", background: T.bg, color: T.ink }}>
+      <Header sync={sync} />
 
-      {/* ===== Hero ===== */}
-      <div className="tj-hero" style={{ background: TJ.grad, color: "#fff", padding: "26px 22px 30px", position: "relative", overflow: "hidden" }}>
-        <div className="softblob" style={{ width: 260, height: 260, background: "#99F6E4", top: -120, insetInlineStart: "12%" }} />
-        <div className="softblob" style={{ width: 300, height: 300, background: "#BFDBFE", bottom: -170, insetInlineEnd: "6%" }} />
-        <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, position: "relative" }}>
-          <div style={{ flex: "1 1 260px" }}>
-            <h1 className="disp" style={{ margin: 0, fontSize: 30 }}>יומן המשימות של אופיר ✨</h1>
-            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.92 }}>
-              {today.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <HeroStat label="משימות פתוחות" value={openCount} />
-            <HeroStat label="קריטיות" value={criticalCount} accent />
-            <HeroStat label="יעד להיום" value={dueTodayCount} />
-          </div>
+      {/* ===== toolbar: view tabs + new task ===== */}
+      <div className="tj-toolbar" style={{
+        maxWidth: 1280, margin: "0 auto", padding: "14px 18px 0",
+        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+      }}>
+        <nav className="no-scrollbar" style={{
+          display: "flex", gap: 2, background: T.surface, border: `1px solid ${T.line}`,
+          borderRadius: 12, padding: 3, overflowX: "auto", maxWidth: "100%",
+        }}>
+          {VIEWS.map((v) => {
+            const active = view === v.key;
+            return (
+              <button key={v.key} onClick={() => setView(v.key)} style={{
+                display: "inline-flex", alignItems: "center", gap: 7,
+                background: active ? T.surface2 : "transparent",
+                color: active ? T.ink : T.ink2,
+                border: "none", borderRadius: 9, padding: "8px 14px",
+                fontSize: 13, fontWeight: active ? 600 : 400, cursor: "pointer",
+                whiteSpace: "nowrap", fontFamily: "inherit",
+                boxShadow: active ? `inset 0 0 0 1px ${T.lineStrong}` : "none",
+              }}>
+                <span style={{ color: active ? T.accent : T.ink3, display: "inline-flex" }}>{v.icon(15)}</span>
+                {v.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <span title={syncState === "local" ? "הנתונים נשמרים בדפדפן זה בלבד — להפעלת סנכרון יש להריץ את schema-journal.sql" : undefined}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5,
+              color: sync.color, border: `1px solid ${T.line}`, borderRadius: 99, padding: "5px 12px",
+            }}>
+            {sync.icon}{sync.label}
+          </span>
           <button onClick={createTask} className="tj-newbtn" style={{
-            background: "#fff", color: TJ.blueD, border: "none", borderRadius: 14,
-            padding: "13px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer",
-            boxShadow: "0 4px 18px rgba(0,0,0,0.18)", fontFamily: "var(--font-display)",
+            display: "inline-flex", alignItems: "center", gap: 8,
+            background: T.grad, color: "#06121F", border: "none", borderRadius: 11,
+            padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+            fontFamily: "var(--font-display)",
           }}>
-            ＋ משימה חדשה
+            {Ic.plus(15)} משימה חדשה
           </button>
         </div>
       </div>
 
-      {/* ===== Body: sidebar + main ===== */}
-      <div className="tj-layout" style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 16px 60px", display: "flex", gap: 18, alignItems: "flex-start" }}>
+      {/* ===== body ===== */}
+      <div className="tj-layout" style={{
+        maxWidth: 1280, margin: "0 auto", padding: "16px 18px 60px",
+        display: "flex", gap: 16, alignItems: "flex-start",
+      }}>
 
-        {/* ---- Sidebar ---- */}
-        <aside style={{
-          ...card, width: 262, flexShrink: 0, padding: 16,
+        {/* ---- sidebar ---- */}
+        <aside className={sidebarOpen ? "tj-card" : "tj-sidebar tj-card"} style={{
+          ...card, width: 258, flexShrink: 0, padding: 16,
           position: "sticky", top: 14,
           display: sidebarOpen ? "block" : undefined,
-        }} className={sidebarOpen ? "tj-card" : "tj-sidebar tj-card"}>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>סינון</div>
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, color: T.ink2, fontSize: 12, fontWeight: 600 }}>
+            {Ic.filter(14)} סינון
+            {filtersActive && (
+              <button onClick={() => {
+                setCatFilter(new Set()); setNatureFilter(new Set()); setStatusFilter("all");
+                setCriticalOnly(false); setSearch(""); setSelectedDate(null);
+              }} style={{
+                marginInlineStart: "auto", background: "none", border: "none",
+                color: T.accent, fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+              }}>
+                ניקוי
+              </button>
+            )}
+          </div>
 
-          <input
-            className="f-input" placeholder="🔍 חיפוש משימה…" value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: "100%", marginBottom: 14, borderRadius: 12 }}
-          />
+          <div style={{ position: "relative", marginBottom: 16 }}>
+            <span style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: T.ink3 }}>
+              {Ic.search(14)}
+            </span>
+            <input
+              placeholder="חיפוש משימה…" value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...inputStyle, width: "100%", paddingInlineStart: 32 }}
+            />
+          </div>
 
-          {/* categories */}
           <SectionTitle>קטגוריות</SectionTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 10 }}>
             {categories.map((c) => {
               const active = catFilter.has(c.id);
+              const count = filteredCountByCat(journal.tasks, c.id);
               return (
-                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div key={c.id} className="tj-catrow" style={{ display: "flex", alignItems: "center", gap: 2 }}>
                   <button
                     onClick={() => toggleSet(catFilter, c.id, setCatFilter)}
                     style={{
                       flex: 1, display: "flex", alignItems: "center", gap: 9, textAlign: "start",
-                      background: active ? `${c.color}1A` : "transparent",
-                      border: `1px solid ${active ? c.color : "transparent"}`,
-                      borderRadius: 10, padding: "7px 10px", cursor: "pointer",
-                      fontSize: 13, fontWeight: active ? 600 : 400, color: TJ.ink, fontFamily: "inherit",
+                      background: active ? `${c.color}1C` : "transparent",
+                      border: `1px solid ${active ? `${c.color}66` : "transparent"}`,
+                      borderRadius: 9, padding: "7px 10px", cursor: "pointer",
+                      fontSize: 12.5, fontWeight: active ? 600 : 400,
+                      color: active ? T.ink : T.ink2, fontFamily: "inherit",
                     }}>
-                    <span style={{ width: 11, height: 11, borderRadius: 4, background: c.color, flexShrink: 0 }} />
-                    {c.name}
-                    {active && <span style={{ marginInlineStart: "auto", color: c.color, fontSize: 12 }}>✓</span>}
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                    <span className="num" style={{ fontSize: 10.5, color: T.ink3 }}>{count}</span>
                   </button>
-                  <button title="מחיקת קטגוריה" onClick={() => deleteCategory(c.id)} style={{
-                    background: "transparent", border: "none", color: TJ.ink2, opacity: 0.45,
-                    cursor: "pointer", fontSize: 12, padding: 4,
-                  }}>✕</button>
+                  <button title="מחיקת קטגוריה" onClick={() => deleteCategory(c.id)}
+                    className="tj-catdel"
+                    style={{ background: "transparent", border: "none", color: T.ink3, cursor: "pointer", padding: 4, borderRadius: 6 }}>
+                    {Ic.x(11)}
+                  </button>
                 </div>
               );
             })}
           </div>
 
           {/* add category */}
-          <div style={{ background: TJ.bg, borderRadius: 12, padding: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: TJ.ink2, marginBottom: 6 }}>＋ קטגוריה חדשה</div>
+          <div style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 11, padding: 10, marginBottom: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.ink2, marginBottom: 7, display: "flex", alignItems: "center", gap: 5 }}>
+              {Ic.plus(12)} קטגוריה חדשה
+            </div>
             <input
-              className="f-input" placeholder="שם הקטגוריה" value={newCatName}
+              placeholder="שם הקטגוריה" value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && newCatName.trim()) { addCategory(newCatName, newCatColor); setNewCatName(""); } }}
-              style={{ width: "100%", padding: "7px 10px", fontSize: 12, marginBottom: 8 }}
+              style={{ ...inputStyle, width: "100%", padding: "7px 10px", fontSize: 12, marginBottom: 8 }}
             />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
               {CATEGORY_COLOR_CHOICES.map((col) => (
                 <button key={col} onClick={() => setNewCatColor(col)} style={{
-                  width: 20, height: 20, borderRadius: 7, background: col, cursor: "pointer",
-                  border: newCatColor === col ? "2px solid #0F2540" : "2px solid transparent",
-                  outline: newCatColor === col ? "2px solid #fff" : "none", outlineOffset: -3,
+                  width: 18, height: 18, borderRadius: 6, background: col, cursor: "pointer",
+                  border: "none",
+                  outline: newCatColor === col ? `2px solid ${T.ink}` : "none", outlineOffset: 1,
                 }} />
               ))}
               <input type="color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)}
                 title="צבע חופשי"
-                style={{ width: 20, height: 20, padding: 0, border: "none", borderRadius: 7, cursor: "pointer", background: "transparent" }} />
+                style={{ width: 18, height: 18, padding: 0, border: "none", borderRadius: 6, cursor: "pointer", background: "transparent" }} />
             </div>
             <button
               onClick={() => { if (newCatName.trim()) { addCategory(newCatName, newCatColor); setNewCatName(""); } }}
               disabled={!newCatName.trim()}
               style={{
-                width: "100%", background: newCatName.trim() ? TJ.grad : "#D8E4E6", color: "#fff",
-                border: "none", borderRadius: 10, padding: "8px 0", fontSize: 12, fontWeight: 600,
+                width: "100%", border: "none", borderRadius: 9, padding: "8px 0",
+                fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                background: newCatName.trim() ? T.accentSoft : T.surface,
+                color: newCatName.trim() ? T.accent : T.ink3,
                 cursor: newCatName.trim() ? "pointer" : "default",
+                boxShadow: newCatName.trim() ? `inset 0 0 0 1px ${T.accent}55` : `inset 0 0 0 1px ${T.line}`,
               }}>
               הוספה
             </button>
           </div>
 
-          {/* nature */}
           <SectionTitle>מהות</SectionTitle>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-            {(Object.keys(NATURE_LABELS) as TaskNature[]).map((n) => {
-              const active = natureFilter.has(n);
-              return (
-                <button key={n} onClick={() => toggleSet(natureFilter, n, setNatureFilter)} style={{
-                  borderRadius: 99, padding: "5px 13px", fontSize: 12, cursor: "pointer",
-                  border: `1px solid ${active ? NATURE_COLORS[n] : TJ.line}`,
-                  background: active ? `${NATURE_COLORS[n]}1A` : "#fff",
-                  color: active ? NATURE_COLORS[n] : TJ.ink2, fontWeight: active ? 700 : 400,
-                }}>
-                  {NATURE_LABELS[n]}
-                </button>
-              );
-            })}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
+            {(Object.keys(NATURE_LABELS) as TaskNature[]).map((n) => (
+              <button key={n} onClick={() => toggleSet(natureFilter, n, setNatureFilter)}
+                style={chip(NATURE_COLORS[n], natureFilter.has(n))}>
+                {NATURE_LABELS[n]}
+              </button>
+            ))}
           </div>
 
-          {/* status */}
           <SectionTitle>סטטוס</SectionTitle>
-          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-            {([["all", "הכל"], ["open", "פתוחות"], ["done", "הושלמו"]] as const).map(([v, label]) => (
+          <div style={{ display: "flex", gap: 5, marginBottom: 16 }}>
+            {([["all", "הכל"], ["active", "פעילות"], ["done", "הושלמו"]] as const).map(([v, label]) => (
               <button key={v} onClick={() => setStatusFilter(v)} style={{
-                flex: 1, borderRadius: 10, padding: "6px 0", fontSize: 12, cursor: "pointer",
-                border: `1px solid ${statusFilter === v ? TJ.blue : TJ.line}`,
-                background: statusFilter === v ? TJ.blueL : "#fff",
-                color: statusFilter === v ? TJ.blueD : TJ.ink2, fontWeight: statusFilter === v ? 700 : 400,
+                flex: 1, borderRadius: 9, padding: "7px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                border: `1px solid ${statusFilter === v ? `${T.accent}66` : T.line}`,
+                background: statusFilter === v ? T.accentSoft : "transparent",
+                color: statusFilter === v ? T.accent : T.ink2, fontWeight: statusFilter === v ? 600 : 400,
               }}>{label}</button>
             ))}
           </div>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginBottom: 16 }}>
-            <input type="checkbox" checked={criticalOnly} onChange={(e) => setCriticalOnly(e.target.checked)}
-              style={{ accentColor: TJ.danger, width: 15, height: 15 }} />
-            <span style={{ color: TJ.danger, fontWeight: 600 }}>🔥 רק משימות קריטיות</span>
-          </label>
+          <button onClick={() => setCriticalOnly(!criticalOnly)} style={{
+            display: "flex", alignItems: "center", gap: 8, width: "100%",
+            background: criticalOnly ? T.dangerSoft : "transparent",
+            border: `1px solid ${criticalOnly ? `${T.danger}55` : T.line}`,
+            borderRadius: 9, padding: "8px 10px", fontSize: 12.5, cursor: "pointer",
+            color: criticalOnly ? T.danger : T.ink2, fontWeight: criticalOnly ? 600 : 400,
+            fontFamily: "inherit", marginBottom: 18,
+          }}>
+            <span style={{ color: T.danger, display: "inline-flex" }}>{Ic.flame(14)}</span>
+            רק משימות קריטיות
+          </button>
 
-          {filtersActive && (
-            <button onClick={() => {
-              setCatFilter(new Set()); setNatureFilter(new Set()); setStatusFilter("all");
-              setCriticalOnly(false); setSearch(""); setSelectedDate(null);
-            }} style={{
-              width: "100%", background: "transparent", border: `1px dashed ${TJ.line}`,
-              borderRadius: 10, padding: "7px 0", fontSize: 12, color: TJ.ink2, cursor: "pointer", marginBottom: 14,
-            }}>
-              ניקוי כל הסינונים
-            </button>
-          )}
-
-          {/* upcoming reminders */}
           {upcomingReminders.length > 0 && (
             <>
-              <SectionTitle>⏰ תזכורות קרובות</SectionTitle>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <SectionTitle>תזכורות קרובות</SectionTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                 {upcomingReminders.map(({ task, r }) => (
                   <button key={r.id} onClick={() => setOpenTaskId(task.id)} style={{
-                    textAlign: "start", background: TJ.mintL, border: "none", borderRadius: 10,
-                    padding: "8px 10px", cursor: "pointer", fontFamily: "inherit",
+                    textAlign: "start", background: T.bg2, border: `1px solid ${T.line}`,
+                    borderRadius: 9, padding: "8px 10px", cursor: "pointer", fontFamily: "inherit",
+                    display: "flex", gap: 8, alignItems: "flex-start",
                   }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: TJ.ink }}>{r.note || task.title}</div>
-                    <div style={{ fontSize: 10.5, color: "#0F766E", marginTop: 2 }} className="num">
-                      {new Date(r.datetime).toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </div>
+                    <span style={{ color: T.mint, marginTop: 1 }}>{Ic.clock(13)}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.note || task.title}
+                      </span>
+                      <span className="num" style={{ fontSize: 10.5, color: T.ink3 }}>
+                        {new Date(r.datetime).toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -407,104 +458,130 @@ export default function TaskJournal() {
           )}
         </aside>
 
-        {/* ---- Main ---- */}
-        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 18 }}>
+        {/* ---- main ---- */}
+        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
 
-          {/* mobile: sidebar toggle */}
           <button className="tj-sidebar-toggle" onClick={() => setSidebarOpen((o) => !o)} style={{
-            display: "none", ...card, padding: "10px 16px", fontSize: 13, fontWeight: 600,
-            color: TJ.blueD, cursor: "pointer", textAlign: "start",
+            display: "none", ...card, padding: "10px 14px", fontSize: 13, fontWeight: 600,
+            color: T.ink2, cursor: "pointer", textAlign: "start", fontFamily: "inherit",
+            alignItems: "center", gap: 8,
           }}>
-            {sidebarOpen ? "✕ סגירת סינון" : "☰ סינון וקטגוריות"}
+            {sidebarOpen ? <>{Ic.x(14)} סגירת סינון</> : <>{Ic.filter(14)} סינון וקטגוריות</>}
           </button>
 
-          {/* ===== Critical tasks — separate section ===== */}
-          {criticalTasks.length > 0 && (
-            <section className="tj-card" style={{ ...card, padding: 16, borderColor: "#FCA5A5", background: "linear-gradient(180deg,#FFF5F5,#fff)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 18 }}>🔥</span>
-                <h2 className="disp" style={{ margin: 0, fontSize: 17, color: "#B91C1C" }}>משימות קריטיות</h2>
-                <span className="tag danger">{criticalTasks.length}</span>
+          {view === "dashboard" && (
+            <>
+              {/* KPI strip */}
+              <div className="tj-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+                <Kpi label="משימות פתוחות" value={openCount} icon={Ic.circle(15)} color={T.accent} />
+                <Kpi label="בתהליך" value={inProgressCount} icon={Ic.progress(15)} color={T.amber} />
+                <Kpi label="קריטיות" value={criticalCount} icon={Ic.flame(15)} color={T.danger} />
+                <Kpi label="באיחור" value={overdueCount} icon={Ic.alert(15)} color={overdueCount > 0 ? T.danger : T.ink3} />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 10 }}>
-                {criticalTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} cat={t.categoryId ? catById[t.categoryId] : undefined}
-                    critical onOpen={() => setOpenTaskId(t.id)} onToggle={() => toggleDone(t)} compact />
-                ))}
-              </div>
-            </section>
+
+              {/* critical strip */}
+              {criticalTasks.length > 0 && (
+                <section className="tj-card" style={{ ...card, padding: 16, borderColor: `${T.danger}44` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <span style={{ color: T.danger }}>{Ic.flame(16)}</span>
+                    <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, fontFamily: "var(--font-display)" }}>משימות קריטיות</h2>
+                    <span className="num" style={{ fontSize: 11.5, color: T.danger, background: T.dangerSoft, borderRadius: 99, padding: "2px 9px" }}>
+                      {criticalTasks.length}
+                    </span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 8 }}>
+                    {criticalTasks.map((t) => (
+                      <TaskRow key={t.id} task={t} cat={t.categoryId ? catById[t.categoryId] : undefined}
+                        critical todayKey={todayKey}
+                        onOpen={() => setOpenTaskId(t.id)} onCycle={() => cycleStatus(t)} compact />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* calendar */}
+              <section className="tj-card" style={{ ...card, padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                  <span style={{ color: T.accent }}>{Ic.calendar(16)}</span>
+                  <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, fontFamily: "var(--font-display)" }}>לוח שנה</h2>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginInlineStart: "auto" }}>
+                    <NavBtn onClick={() => { const m = calMonth - 1; if (m < 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(m); }}>{Ic.chevR(14)}</NavBtn>
+                    <div className="num" style={{ minWidth: 118, textAlign: "center", fontWeight: 600, fontSize: 13.5 }}>
+                      {HE_MONTHS[calMonth]} {calYear}
+                    </div>
+                    <NavBtn onClick={() => { const m = calMonth + 1; if (m > 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(m); }}>{Ic.chevL(14)}</NavBtn>
+                    <button onClick={() => { setCalYear(today.getFullYear()); setCalMonth(today.getMonth()); }} style={{
+                      marginInlineStart: 6, background: T.accentSoft, color: T.accent, border: "none",
+                      borderRadius: 99, padding: "5px 13px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    }}>היום</button>
+                  </div>
+                </div>
+
+                <CalendarGrid
+                  year={calYear} month={calMonth} todayKey={todayKey}
+                  items={calendarItems} catById={catById}
+                  selectedDate={selectedDate}
+                  onSelectDate={(k) => setSelectedDate(selectedDate === k ? null : k)}
+                  onOpenTask={(id) => setOpenTaskId(id)}
+                />
+
+                {selectedDate && (
+                  <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+                    <span style={{ color: T.mint, background: T.mintSoft, borderRadius: 99, padding: "3px 12px" }}>
+                      מסונן לתאריך {formatDateHe(selectedDate)}
+                    </span>
+                    <button onClick={() => setSelectedDate(null)} style={{ background: "none", border: "none", color: T.ink3, cursor: "pointer", fontSize: 11.5, textDecoration: "underline", fontFamily: "inherit" }}>
+                      הצגת הכל
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              {/* task list */}
+              <section className="tj-card" style={{ ...card, padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ color: T.accent }}>{Ic.layers(16)}</span>
+                  <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, fontFamily: "var(--font-display)" }}>המשימות שלי</h2>
+                  <span className="num" style={{ fontSize: 11.5, color: T.ink2, background: T.surface2, borderRadius: 99, padding: "2px 9px" }}>
+                    {filteredTasks.length}
+                  </span>
+                </div>
+
+                {filteredTasks.length === 0 ? (
+                  <Empty filtersActive={filtersActive} onCreate={createTask} />
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {regularTasks.map((t) => (
+                      <TaskRow key={t.id} task={t} cat={t.categoryId ? catById[t.categoryId] : undefined}
+                        todayKey={todayKey}
+                        onOpen={() => setOpenTaskId(t.id)} onCycle={() => cycleStatus(t)} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
           )}
 
-          {/* ===== Calendar ===== */}
-          <section className="tj-card" style={{ ...card, padding: 18 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-              <h2 className="disp" style={{ margin: 0, fontSize: 18 }}>📅 לוח שנה</h2>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginInlineStart: "auto" }}>
-                <CalNavBtn onClick={() => { const m = calMonth - 1; if (m < 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(m); }}>‹</CalNavBtn>
-                <div style={{ minWidth: 130, textAlign: "center", fontWeight: 700, fontSize: 15, fontFamily: "var(--font-display)" }}>
-                  {HE_MONTHS[calMonth]} {calYear}
-                </div>
-                <CalNavBtn onClick={() => { const m = calMonth + 1; if (m > 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(m); }}>›</CalNavBtn>
-                <button onClick={() => { setCalYear(today.getFullYear()); setCalMonth(today.getMonth()); }} style={{
-                  marginInlineStart: 6, background: TJ.blueL, color: TJ.blueD, border: "none",
-                  borderRadius: 99, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                }}>היום</button>
-              </div>
-            </div>
-
-            <CalendarGrid
-              year={calYear} month={calMonth} todayKey={todayKey}
-              items={calendarItems} catById={catById}
-              selectedDate={selectedDate}
-              onSelectDate={(k) => setSelectedDate(selectedDate === k ? null : k)}
-              onOpenTask={(id) => setOpenTaskId(id)}
-            />
-
-            {selectedDate && (
-              <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                <span className="tag" style={{ background: TJ.mintL, color: "#0F766E", borderColor: "#99F6E4" }}>
-                  מסונן לתאריך {formatDateHe(selectedDate)}
-                </span>
-                <button onClick={() => setSelectedDate(null)} style={{ background: "none", border: "none", color: TJ.ink2, cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
-                  הצגת הכל
-                </button>
-              </div>
-            )}
-          </section>
-
-          {/* ===== Task rows ===== */}
-          <section className="tj-card" style={{ ...card, padding: 18 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <h2 className="disp" style={{ margin: 0, fontSize: 18 }}>📋 המשימות שלי</h2>
-              <span className="tag" style={{ background: TJ.blueL, color: TJ.blueD, borderColor: "#BFDBFE" }}>{filteredTasks.length}</span>
-            </div>
-
-            {filteredTasks.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "44px 20px", color: TJ.ink2 }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>🌿</div>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>
-                  {filtersActive ? "אין משימות שתואמות את הסינון" : "היומן ריק — זה הזמן להתחיל!"}
-                </div>
-                {!filtersActive && (
-                  <button onClick={createTask} style={{
-                    marginTop: 14, background: TJ.grad, color: "#fff", border: "none",
-                    borderRadius: 12, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-                  }}>＋ משימה ראשונה</button>
-                )}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {regularTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} cat={t.categoryId ? catById[t.categoryId] : undefined}
-                    onOpen={() => setOpenTaskId(t.id)} onToggle={() => toggleDone(t)} />
-                ))}
-              </div>
-            )}
-          </section>
+          {view === "week" && (
+            <WeekView roots={filteredTasks} catById={catById} todayKey={todayKey} onOpen={setOpenTaskId} />
+          )}
+          {view === "table" && (
+            <TableView roots={filteredTasks} catById={catById} todayKey={todayKey}
+              onOpen={setOpenTaskId} onCycle={cycleStatus} />
+          )}
+          {view === "board" && (
+            <BoardView roots={filteredTasks} catById={catById} todayKey={todayKey}
+              onOpen={setOpenTaskId} onSetStatus={(id, s) => {
+                const t = journal.tasks.find((x) => x.id === id);
+                if (t) setTaskStatus(t, s);
+              }} />
+          )}
+          {view === "stats" && (
+            <StatsView roots={filteredTasks} catById={catById} todayKey={todayKey} />
+          )}
         </main>
       </div>
 
-      {/* modal */}
       {openRoot && (
         <TaskModal
           root={openRoot}
@@ -518,20 +595,23 @@ export default function TaskJournal() {
       )}
 
       <style>{`
+        ::selection { background: rgba(61,126,255,0.4); }
+        .tj-catdel { opacity: 0; transition: opacity .15s; }
+        .tj-catrow:hover .tj-catdel { opacity: 0.7; }
+        input::placeholder, textarea::placeholder { color: #5E7089; }
         @media (max-width: 900px) {
           .tj-sidebar { display: none; }
-          .tj-sidebar-toggle { display: block !important; }
+          .tj-sidebar-toggle { display: flex !important; }
           .tj-layout { flex-direction: column; }
           .tj-layout > aside { width: 100% !important; position: static !important; }
+          .tj-catdel { opacity: 0.7; }
         }
         @media (max-width: 640px) {
-          .tj-hero { padding: 18px 14px 22px !important; }
-          .tj-hero h1 { font-size: 22px !important; }
-          .tj-stat { min-width: 0 !important; flex: 1; padding: 8px 6px !important; }
-          .tj-stat > div:first-child { font-size: 19px !important; }
-          .tj-newbtn { width: 100%; }
-          .tj-layout { padding: 12px 10px 40px !important; gap: 12px !important; }
-          .tj-card { padding: 12px !important; border-radius: 14px !important; }
+          .tj-toolbar { padding: 10px 10px 0 !important; }
+          .tj-layout { padding: 10px 10px 40px !important; gap: 10px !important; }
+          .tj-card { padding: 12px !important; }
+          .tj-kpis { grid-template-columns: repeat(2,1fr) !important; }
+          .tj-newbtn { flex: 1; justify-content: center; }
           .tj-calday { min-height: 52px !important; padding: 3px 3px !important; }
           .tj-calday button { font-size: 8.5px !important; padding: 1px 3px !important; }
         }
@@ -540,128 +620,187 @@ export default function TaskJournal() {
   );
 }
 
-// ============ small pieces ============
+function filteredCountByCat(tasks: Task[], catId: string): number {
+  return flattenTasks(tasks).filter((t) => t.categoryId === catId && !isDone(t)).length;
+}
 
-function HistadrutHeader() {
+// ============ pieces ============
+
+function Header({ sync }: { sync: { icon: React.ReactNode; label: string; color: string } }) {
   return (
     <header style={{
-      background: "#fff", borderBottom: "0.5px solid rgba(15,37,64,0.08)",
-      padding: "10px 16px", display: "flex", alignItems: "center", gap: 12,
+      background: T.bg2, borderBottom: `1px solid ${T.line}`,
+      padding: "10px 18px", display: "flex", alignItems: "center", gap: 12,
     }}>
-      <Image src="/logo-histadrut.svg" alt="ההסתדרות" width={52} height={44}
-        style={{ height: 44, width: "auto" }} />
+      <div style={{ background: "#fff", borderRadius: 10, padding: "4px 7px", display: "flex", alignItems: "center" }}>
+        <Image src="/logo-histadrut.svg" alt="ההסתדרות" width={40} height={34}
+          style={{ height: 32, width: "auto" }} />
+      </div>
       <div style={{ lineHeight: 1.15 }}>
-        <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 21, color: "#E4312B", letterSpacing: "-0.02em" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 17, color: "#F2554A", letterSpacing: "-0.02em" }}>
           ההסתדרות
         </div>
-        <div style={{ fontSize: 11.5, color: "#0F4C97", fontWeight: 600 }}>
+        <div style={{ fontSize: 10.5, color: T.ink2, fontWeight: 500 }}>
           הבית של העובדים בישראל
         </div>
       </div>
+      <div style={{ width: 1, height: 26, background: T.line, marginInline: 4 }} />
+      <div style={{ lineHeight: 1.2, minWidth: 0 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          יומן המשימות של אופיר
+        </div>
+        <div className="num" style={{ fontSize: 10, color: T.ink3, letterSpacing: "0.08em" }}>
+          TASK JOURNAL
+        </div>
+      </div>
+      <span style={{ marginInlineStart: "auto", color: sync.color, display: "inline-flex" }} title={sync.label}>
+        {sync.icon}
+      </span>
     </header>
   );
 }
 
-function HeroStat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div className="tj-stat" style={{
-      background: "rgba(255,255,255,0.16)", backdropFilter: "blur(6px)",
-      border: "1px solid rgba(255,255,255,0.28)", borderRadius: 14,
-      padding: "10px 18px", minWidth: 92, textAlign: "center",
-    }}>
-      <div className="num" style={{ fontSize: 24, fontWeight: 700, color: accent && value > 0 ? "#FDE68A" : "#fff" }}>{value}</div>
-      <div style={{ fontSize: 11, opacity: 0.9 }}>{label}</div>
-    </div>
+    <div style={{
+      fontSize: 10.5, fontWeight: 600, color: T.ink3, marginBottom: 8,
+      letterSpacing: "0.06em", textTransform: "uppercase",
+    }}>{children}</div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, fontWeight: 700, color: "#0F2540", marginBottom: 8 }}>{children}</div>;
-}
-
-function CalNavBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+function NavBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
-      width: 30, height: 30, borderRadius: 10, border: `0.5px solid ${TJ.line}`,
-      background: "#fff", cursor: "pointer", fontSize: 16, color: TJ.ink2,
+      width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.line}`,
+      background: "transparent", cursor: "pointer", color: T.ink2,
       display: "inline-flex", alignItems: "center", justifyContent: "center",
     }}>{children}</button>
   );
 }
 
-function TaskRow({ task, cat, onOpen, onToggle, critical, compact }: {
+function Kpi({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
+  return (
+    <div style={{ ...card, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+      <span style={{
+        width: 34, height: 34, borderRadius: 10, background: `${color}1A`, color,
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="num" style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.1 }}>{value}</div>
+        <div style={{ fontSize: 11, color: T.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function Empty({ filtersActive, onCreate }: { filtersActive: boolean; onCreate: () => void }) {
+  return (
+    <div style={{ textAlign: "center", padding: "44px 20px", color: T.ink3 }}>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: T.ink3 }}>{Ic.layers(34)}</div>
+      <div style={{ fontSize: 14, fontWeight: 500, color: T.ink2 }}>
+        {filtersActive ? "אין משימות שתואמות את הסינון" : "היומן ריק — זה הזמן להתחיל"}
+      </div>
+      {!filtersActive && (
+        <button onClick={onCreate} style={{
+          marginTop: 14, display: "inline-flex", alignItems: "center", gap: 7,
+          background: T.grad, color: "#06121F", border: "none",
+          borderRadius: 10, padding: "9px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+          fontFamily: "var(--font-display)",
+        }}>{Ic.plus(14)} משימה ראשונה</button>
+      )}
+    </div>
+  );
+}
+
+export function TaskRow({ task, cat, onOpen, onCycle, critical, compact, todayKey }: {
   task: Task;
   cat?: TaskCategory;
   onOpen: () => void;
-  onToggle: () => void;
+  onCycle: () => void;
   critical?: boolean;
   compact?: boolean;
+  todayKey: string;
 }) {
   const sub = countSubtasks(task);
-  const accent = critical ? TJ.danger : (cat?.color ?? TJ.sky);
+  const done = isDone(task);
+  const overdue = !done && task.dueDate && task.dueDate < todayKey;
+  const accent = critical ? T.danger : (cat?.color ?? T.ink3);
   return (
     <div
       onClick={onOpen}
       style={{
-        display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
-        background: "#fff", border: `0.5px solid ${critical ? "#FCA5A5" : TJ.line}`,
-        borderInlineStart: `4px solid ${accent}`,
-        borderRadius: 14, padding: compact ? "10px 12px" : "12px 14px",
-        opacity: task.done ? 0.62 : 1,
-        transition: "box-shadow .15s, transform .1s",
+        display: "flex", alignItems: "center", gap: 11, cursor: "pointer",
+        background: T.bg2, border: `1px solid ${T.line}`,
+        borderInlineStart: `3px solid ${accent}`,
+        borderRadius: 12, padding: compact ? "9px 12px" : "11px 13px",
+        opacity: done ? 0.55 : 1,
+        transition: "border-color .15s, background .15s",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(15,37,64,0.10)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = T.surface2; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = T.bg2; }}
     >
-      <input
-        type="checkbox" checked={task.done}
-        onClick={(e) => e.stopPropagation()}
-        onChange={onToggle}
-        style={{ width: 18, height: 18, accentColor: TJ.mint, cursor: "pointer", flexShrink: 0 }}
-      />
+      <button
+        title={`סטטוס: ${STATUS_LABELS[task.status]} (לחיצה מקדמת)`}
+        onClick={(e) => { e.stopPropagation(); onCycle(); }}
+        style={{
+          background: "none", border: "none", cursor: "pointer", padding: 2,
+          color: STATUS_COLORS[task.status], display: "inline-flex", flexShrink: 0,
+        }}>
+        <StatusIcon status={task.status} size={18} />
+      </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <span style={{
-            fontWeight: 600, fontSize: compact ? 13.5 : 14.5,
-            textDecoration: task.done ? "line-through" : "none",
+            fontWeight: 600, fontSize: compact ? 13 : 13.5, color: T.ink,
+            textDecoration: done ? "line-through" : "none",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
           }}>
             {task.title || "ללא שם"}
           </span>
-          <span className="num" style={{ fontSize: 10.5, color: TJ.ink2, flexShrink: 0 }}>
+          <span className="num" style={{ fontSize: 10, color: T.ink3, flexShrink: 0 }}>
             נפתחה {formatDateHe(task.createdAt)}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
-          {task.critical && <span className="tag danger" style={{ fontSize: 10 }}>🔥 קריטי</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5, flexWrap: "wrap" }}>
+          {task.critical && (
+            <Meta color={T.danger}>{Ic.flame(11)} קריטית</Meta>
+          )}
           {cat && (
-            <span className="tag" style={{ fontSize: 10, background: `${cat.color}18`, color: cat.color, borderColor: `${cat.color}55` }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: cat.color }} />
+            <Meta color={cat.color}>
+              <span style={{ width: 7, height: 7, borderRadius: 2.5, background: cat.color }} />
               {cat.name}
-            </span>
+            </Meta>
           )}
-          {task.nature && (
-            <span className="tag" style={{ fontSize: 10, background: `${NATURE_COLORS[task.nature]}14`, color: NATURE_COLORS[task.nature], borderColor: `${NATURE_COLORS[task.nature]}44` }}>
-              {NATURE_LABELS[task.nature]}
-            </span>
-          )}
+          {task.nature && <Meta color={NATURE_COLORS[task.nature]}>{NATURE_LABELS[task.nature]}</Meta>}
           {task.dueDate && (
-            <span className="tag num" style={{ fontSize: 10 }}>🎯 יעד {formatDateHe(task.dueDate)}</span>
+            <Meta color={overdue ? T.danger : T.ink2}>
+              {Ic.target(11)} <span className="num">{formatDateHe(task.dueDate)}</span>
+              {overdue ? " · באיחור" : ""}
+            </Meta>
           )}
-          {task.reminders.some((r) => !r.fired) && <span className="tag" style={{ fontSize: 10 }}>⏰</span>}
-          {task.files.length > 0 && <span className="tag" style={{ fontSize: 10 }}>📎 {task.files.length}</span>}
+          {task.reminders.some((r) => !r.fired) && <Meta color={T.ink3}>{Ic.clock(11)}</Meta>}
+          {task.files.length > 0 && <Meta color={T.ink3}>{Ic.clip(11)} <span className="num">{task.files.length}</span></Meta>}
           {sub.total > 0 && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, color: TJ.ink2 }}>
-              <span style={{ width: 52, height: 5, borderRadius: 99, background: "#E2ECF0", overflow: "hidden", display: "inline-block" }}>
-                <span style={{ display: "block", height: "100%", width: `${(sub.done / sub.total) * 100}%`, background: TJ.grad, borderRadius: 99 }} />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, color: T.ink3 }}>
+              <span style={{ width: 48, height: 4, borderRadius: 99, background: T.surface2, overflow: "hidden", display: "inline-block" }}>
+                <span style={{ display: "block", height: "100%", width: `${(sub.done / sub.total) * 100}%`, background: T.grad, borderRadius: 99 }} />
               </span>
-              <span className="num">{sub.done}/{sub.total} שלבים</span>
+              <span className="num">{sub.done}/{sub.total}</span>
             </span>
           )}
         </div>
       </div>
-      <span style={{ color: TJ.ink2, fontSize: 16, flexShrink: 0, opacity: 0.5 }}>‹</span>
+      <span style={{ color: T.ink3, flexShrink: 0, opacity: 0.6 }}>{Ic.chevL(14)}</span>
     </div>
+  );
+}
+
+function Meta({ children, color }: { children: React.ReactNode; color: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color }}>
+      {children}
+    </span>
   );
 }
 
@@ -677,7 +816,7 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
 }) {
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startPad = first.getDay(); // Sunday-first, native for he-IL
+  const startPad = first.getDay();
   const cells: (number | null)[] = [
     ...Array.from({ length: startPad }, () => null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -688,12 +827,12 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
         {HE_WEEKDAYS.map((d) => (
-          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "#4A6076", padding: "4px 0" }}>{d}</div>
+          <div key={d} style={{ textAlign: "center", fontSize: 10.5, fontWeight: 600, color: T.ink3, padding: "3px 0" }}>{d}</div>
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
         {cells.map((day, i) => {
-          if (day === null) return <div key={i} className="tj-calday" style={{ minHeight: 74, borderRadius: 12, background: "transparent" }} />;
+          if (day === null) return <div key={i} className="tj-calday" style={{ minHeight: 72, borderRadius: 10 }} />;
           const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const dayTasks = items[key] ?? [];
           const isToday = key === todayKey;
@@ -704,21 +843,21 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
               className="tj-calday"
               onClick={() => onSelectDate(key)}
               style={{
-                minHeight: 74, borderRadius: 12, padding: "5px 6px", cursor: "pointer",
-                background: isSelected ? "#CCFBF1" : isToday ? "#DBEAFE" : "#F7FBFC",
-                border: `1px solid ${isSelected ? "#14B8A6" : isToday ? "#2563EB" : "rgba(15,37,64,0.06)"}`,
+                minHeight: 72, borderRadius: 10, padding: "4px 5px", cursor: "pointer",
+                background: isSelected ? T.mintSoft : T.bg2,
+                border: `1px solid ${isSelected ? `${T.mint}66` : isToday ? T.accent : T.line}`,
                 display: "flex", flexDirection: "column", gap: 3, overflow: "hidden",
               }}
             >
               <span className="num" style={{
-                fontSize: 11.5, fontWeight: isToday ? 700 : 500,
-                color: isToday ? "#1E40AF" : "#4A6076",
+                fontSize: 10.5, fontWeight: isToday ? 700 : 400,
+                color: isToday ? T.accent : T.ink3,
               }}>
                 {day}
               </span>
               {dayTasks.slice(0, 3).map((t) => {
                 const c = t.categoryId ? catById[t.categoryId]?.color : undefined;
-                const col = t.critical ? "#EF4444" : (c ?? "#0EA5E9");
+                const col = t.critical ? T.danger : (c ?? T.accent);
                 return (
                   <button
                     key={t.id}
@@ -726,20 +865,20 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
                     title={t.title}
                     style={{
                       display: "block", width: "100%", textAlign: "start",
-                      background: `${col}1C`, color: col, border: "none",
-                      borderInlineStart: `3px solid ${col}`,
-                      borderRadius: 6, padding: "2px 5px", fontSize: 10, fontWeight: 600,
+                      background: `${col}26`, color: mixToInk(col), border: "none",
+                      borderInlineStart: `2.5px solid ${col}`,
+                      borderRadius: 5, padding: "2px 5px", fontSize: 9.5, fontWeight: 500,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       cursor: "pointer", fontFamily: "inherit",
-                      textDecoration: t.done ? "line-through" : "none",
+                      textDecoration: isDone(t) ? "line-through" : "none",
                     }}
                   >
-                    {t.critical ? "🔥 " : ""}{t.title || "ללא שם"}
+                    {t.title || "ללא שם"}
                   </button>
                 );
               })}
               {dayTasks.length > 3 && (
-                <span style={{ fontSize: 9.5, color: "#4A6076" }}>‎+{dayTasks.length - 3} נוספות</span>
+                <span className="num" style={{ fontSize: 9, color: T.ink3 }}>‎+{dayTasks.length - 3}</span>
               )}
             </div>
           );
@@ -747,4 +886,12 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
       </div>
     </div>
   );
+}
+
+// טקסט על צ'יפ צבעוני בלוח — גרסה בהירה של צבע הקטגוריה שקריאה על כהה
+function mixToInk(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lift = (v: number) => Math.round(v + (255 - v) * 0.55);
+  return `rgb(${lift(r)},${lift(g)},${lift(b)})`;
 }
