@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { TopBar } from "@/components/v3/TopBar";
+import Image from "next/image";
 import { useToast } from "@/components/Toast";
 import {
   type JournalData, type Task, type TaskCategory, type TaskNature,
@@ -219,7 +219,7 @@ export default function TaskJournal() {
   if (!journal) {
     return (
       <div style={{ minHeight: "100vh", background: TJ.bg }}>
-        <TopBar variant="neutral" title="יומן המשימות של אופיר" subtitle="OFIR · TASK JOURNAL" showOfaktiviLogo={false} showUserChip={false} />
+        <HistadrutHeader />
         <div style={{ padding: 40, display: "grid", gap: 12 }}>
           <div className="skeleton" style={{ height: 120, borderRadius: 18 }} />
           <div className="skeleton" style={{ height: 340, borderRadius: 18 }} />
@@ -230,10 +230,10 @@ export default function TaskJournal() {
 
   return (
     <div style={{ minHeight: "100vh", background: TJ.bg, color: TJ.ink }}>
-      <TopBar variant="neutral" title="יומן המשימות של אופיר" subtitle="OFIR · TASK JOURNAL" showOfaktiviLogo={false} showUserChip={false} />
+      <HistadrutHeader />
 
       {/* ===== Hero ===== */}
-      <div style={{ background: TJ.grad, color: "#fff", padding: "26px 22px 30px", position: "relative", overflow: "hidden" }}>
+      <div className="tj-hero" style={{ background: TJ.grad, color: "#fff", padding: "26px 22px 30px", position: "relative", overflow: "hidden" }}>
         <div className="softblob" style={{ width: 260, height: 260, background: "#99F6E4", top: -120, insetInlineStart: "12%" }} />
         <div className="softblob" style={{ width: 300, height: 300, background: "#BFDBFE", bottom: -170, insetInlineEnd: "6%" }} />
         <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, position: "relative" }}>
@@ -248,7 +248,7 @@ export default function TaskJournal() {
             <HeroStat label="קריטיות" value={criticalCount} accent />
             <HeroStat label="יעד להיום" value={dueTodayCount} />
           </div>
-          <button onClick={createTask} style={{
+          <button onClick={createTask} className="tj-newbtn" style={{
             background: "#fff", color: TJ.blueD, border: "none", borderRadius: 14,
             padding: "13px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer",
             boxShadow: "0 4px 18px rgba(0,0,0,0.18)", fontFamily: "var(--font-display)",
@@ -259,14 +259,14 @@ export default function TaskJournal() {
       </div>
 
       {/* ===== Body: sidebar + main ===== */}
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 16px 60px", display: "flex", gap: 18, alignItems: "flex-start" }}>
+      <div className="tj-layout" style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 16px 60px", display: "flex", gap: 18, alignItems: "flex-start" }}>
 
         {/* ---- Sidebar ---- */}
         <aside style={{
           ...card, width: 262, flexShrink: 0, padding: 16,
           position: "sticky", top: 14,
           display: sidebarOpen ? "block" : undefined,
-        }} className={sidebarOpen ? "" : "tj-sidebar"}>
+        }} className={sidebarOpen ? "tj-card" : "tj-sidebar tj-card"}>
           <div className="eyebrow" style={{ marginBottom: 10 }}>סינון</div>
 
           <input
@@ -420,7 +420,7 @@ export default function TaskJournal() {
 
           {/* ===== Critical tasks — separate section ===== */}
           {criticalTasks.length > 0 && (
-            <section style={{ ...card, padding: 16, borderColor: "#FCA5A5", background: "linear-gradient(180deg,#FFF5F5,#fff)" }}>
+            <section className="tj-card" style={{ ...card, padding: 16, borderColor: "#FCA5A5", background: "linear-gradient(180deg,#FFF5F5,#fff)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 18 }}>🔥</span>
                 <h2 className="disp" style={{ margin: 0, fontSize: 17, color: "#B91C1C" }}>משימות קריטיות</h2>
@@ -436,7 +436,7 @@ export default function TaskJournal() {
           )}
 
           {/* ===== Calendar ===== */}
-          <section style={{ ...card, padding: 18 }}>
+          <section className="tj-card" style={{ ...card, padding: 18 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <h2 className="disp" style={{ margin: 0, fontSize: 18 }}>📅 לוח שנה</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginInlineStart: "auto" }}>
@@ -473,7 +473,7 @@ export default function TaskJournal() {
           </section>
 
           {/* ===== Task rows ===== */}
-          <section style={{ ...card, padding: 18 }}>
+          <section className="tj-card" style={{ ...card, padding: 18 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <h2 className="disp" style={{ margin: 0, fontSize: 18 }}>📋 המשימות שלי</h2>
               <span className="tag" style={{ background: TJ.blueL, color: TJ.blueD, borderColor: "#BFDBFE" }}>{filteredTasks.length}</span>
@@ -521,6 +521,19 @@ export default function TaskJournal() {
         @media (max-width: 900px) {
           .tj-sidebar { display: none; }
           .tj-sidebar-toggle { display: block !important; }
+          .tj-layout { flex-direction: column; }
+          .tj-layout > aside { width: 100% !important; position: static !important; }
+        }
+        @media (max-width: 640px) {
+          .tj-hero { padding: 18px 14px 22px !important; }
+          .tj-hero h1 { font-size: 22px !important; }
+          .tj-stat { min-width: 0 !important; flex: 1; padding: 8px 6px !important; }
+          .tj-stat > div:first-child { font-size: 19px !important; }
+          .tj-newbtn { width: 100%; }
+          .tj-layout { padding: 12px 10px 40px !important; gap: 12px !important; }
+          .tj-card { padding: 12px !important; border-radius: 14px !important; }
+          .tj-calday { min-height: 52px !important; padding: 3px 3px !important; }
+          .tj-calday button { font-size: 8.5px !important; padding: 1px 3px !important; }
         }
       `}</style>
     </div>
@@ -529,9 +542,29 @@ export default function TaskJournal() {
 
 // ============ small pieces ============
 
+function HistadrutHeader() {
+  return (
+    <header style={{
+      background: "#fff", borderBottom: "0.5px solid rgba(15,37,64,0.08)",
+      padding: "10px 16px", display: "flex", alignItems: "center", gap: 12,
+    }}>
+      <Image src="/logo-histadrut.svg" alt="ההסתדרות" width={52} height={44}
+        style={{ height: 44, width: "auto" }} />
+      <div style={{ lineHeight: 1.15 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 21, color: "#E4312B", letterSpacing: "-0.02em" }}>
+          ההסתדרות
+        </div>
+        <div style={{ fontSize: 11.5, color: "#0F4C97", fontWeight: 600 }}>
+          הבית של העובדים בישראל
+        </div>
+      </div>
+    </header>
+  );
+}
+
 function HeroStat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
   return (
-    <div style={{
+    <div className="tj-stat" style={{
       background: "rgba(255,255,255,0.16)", backdropFilter: "blur(6px)",
       border: "1px solid rgba(255,255,255,0.28)", borderRadius: 14,
       padding: "10px 18px", minWidth: 92, textAlign: "center",
@@ -660,7 +693,7 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
         {cells.map((day, i) => {
-          if (day === null) return <div key={i} style={{ minHeight: 74, borderRadius: 12, background: "transparent" }} />;
+          if (day === null) return <div key={i} className="tj-calday" style={{ minHeight: 74, borderRadius: 12, background: "transparent" }} />;
           const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const dayTasks = items[key] ?? [];
           const isToday = key === todayKey;
@@ -668,6 +701,7 @@ function CalendarGrid({ year, month, todayKey, items, catById, selectedDate, onS
           return (
             <div
               key={i}
+              className="tj-calday"
               onClick={() => onSelectDate(key)}
               style={{
                 minHeight: 74, borderRadius: 12, padding: "5px 6px", cursor: "pointer",

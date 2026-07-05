@@ -304,16 +304,17 @@ export function TaskModal({ root, focusId, categories, onSave, onDelete, onAddCa
           </Field>
 
           {/* dates */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="tj-dates" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Field label="🎯 תאריך יעד (מוצג בלוח השנה)">
               <input type="date" className="f-input" value={current.dueDate ?? ""}
-                onChange={(e) => patch({ dueDate: e.target.value || null })} style={{ width: "100%" }} />
+                onChange={(e) => patch({ dueDate: e.target.value || null })} style={{ width: "100%", minWidth: 0 }} />
             </Field>
             <Field label="🏁 תאריך סיום">
               <input type="date" className="f-input" value={current.endDate ?? ""}
-                onChange={(e) => patch({ endDate: e.target.value || null })} style={{ width: "100%" }} />
+                onChange={(e) => patch({ endDate: e.target.value || null })} style={{ width: "100%", minWidth: 0 }} />
             </Field>
           </div>
+          <style>{`@media (max-width: 560px) { .tj-dates { grid-template-columns: 1fr !important; } }`}</style>
 
           {/* reminders */}
           <Field label="⏰ תזכורות">
