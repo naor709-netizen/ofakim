@@ -9,6 +9,7 @@ import {
 } from "@/lib/data";
 import BotChat from "@/components/BotChat";
 import MonthlyView from "@/components/MonthlyView";
+import { CatArt } from "@/components/CatArt";
 import { supabase } from "@/lib/supabase";
 import { getCategories, getEvents, createEvent, updateEvent, deleteEvent, uploadEventPoster, type DbEvent, type DbCategory } from "@/lib/events";
 import { logAudit, getInfrastructures, createInfrastructure, type Infrastructure } from "@/lib/infrastructure";
@@ -829,10 +830,10 @@ export default function StaffGantt({ department }: StaffGanttProps) {
         })()}
 
         {/* מקרא */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10, fontSize: 11, color: "var(--text-tertiary)" }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 10, fontSize: 11, color: "var(--text-secondary)" }}>
           {visibleCats.map(cat => (
-            <span key={cat.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: cat.color, display: "inline-block" }} />
+            <span key={cat.id} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <CatArt id={cat.id} color={cat.color} size={16} />
               {cat.name}
             </span>
           ))}
@@ -871,26 +872,39 @@ export default function StaffGantt({ department }: StaffGanttProps) {
         <div style={{ minWidth: 900 }}>
 
           {/* כותרת חודשים */}
-          <div style={{ display: "grid", gridTemplateColumns: "140px repeat(12, 1fr)", borderBottom: "2px solid " + cfg.primary, background: cfg.primary }}>
-            <div style={{ padding: "10px 14px", fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
+          <div style={{
+            display: "grid", gridTemplateColumns: "172px repeat(12, 1fr)",
+            borderBottom: "2px solid " + cfg.primaryDark,
+            background: `linear-gradient(135deg, ${cfg.primaryDark} 0%, ${cfg.primary} 55%, ${cfg.primary} 100%)`,
+          }}>
+            <div style={{ padding: "12px 14px", fontSize: 11, color: "rgba(255,255,255,0.75)", fontFamily: "var(--font-mono)", letterSpacing: "0.06em", display: "flex", alignItems: "center" }}>
               קטגוריה
             </div>
-            {SCHOOL_YEAR_MONTHS.map((m, i) => (
-              <div key={m} style={{
-                padding: "10px 4px", textAlign: "center", fontSize: 11,
-                fontWeight: 600, color: "#fff",
-                borderRight: i < 11 ? "1px solid rgba(255,255,255,0.15)" : "none",
-                letterSpacing: "0.03em",
-              }}>
-                {MONTHS_HE[i]}
-              </div>
-            ))}
+            {SCHOOL_YEAR_MONTHS.map((m, i) => {
+              const isNow = m === todayDate.getMonth() + 1;
+              return (
+                <div key={m} style={{
+                  padding: "9px 3px", textAlign: "center", fontSize: 11,
+                  fontWeight: isNow ? 800 : 600, color: "#fff",
+                  borderRight: i < 11 ? "1px solid rgba(255,255,255,0.15)" : "none",
+                  letterSpacing: "0.03em",
+                  position: "relative",
+                }}>
+                  <span style={isNow ? {
+                    background: "rgba(255,255,255,0.22)", borderRadius: 99, padding: "3px 9px",
+                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.35)",
+                  } : undefined}>
+                    {MONTHS_HE[i]}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {/* שורת חגים */}
-          <div style={{ display: "grid", gridTemplateColumns: "140px repeat(12, 1fr)", borderBottom: "1px solid #F5D78E", background: "linear-gradient(90deg,#FFFBEB,#FFFDF5)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "172px repeat(12, 1fr)", borderBottom: "1px solid #F5D78E", background: "linear-gradient(90deg,#FFFBEB,#FFFDF5)" }}>
             <div style={{ padding: "6px 14px", fontSize: 10, fontWeight: 600, color: "#92400E", display: "flex", alignItems: "center", gap: 5 }}>
-              ✡️ חגים
+              ✡️ חגים ומועדים
             </div>
             <div style={{ gridColumn: "2 / -1", display: "grid", gridTemplateColumns: "repeat(12, 1fr)" }}>
               {SCHOOL_YEAR_MONTHS.map((m, i) => {
@@ -918,43 +932,43 @@ export default function StaffGantt({ department }: StaffGanttProps) {
           {visibleCats.map((cat, catIdx) => {
             const isMyDept = cat.department === department || cat.department === "both";
             const laneCount = lanesByCat.counts.get(cat.id) || 1;
-            const rowHeight = Math.max(48, 14 + laneCount * 28);
-            const catIcon: Record<string, string> = {
-              early: "🌱", elementary: "📚", secondary: "🎓", haredi: "✡️",
-              camps: "⛺", "edu-general": "🔵", training: "📋", breaks: "🏖️",
-              dream: "✨", social: "🤝", meaningful: "💫", movements: "🏕️",
-              prep: "🎯", recreation: "🎮", "youth-general": "🟠",
-            };
-            const icon = catIcon[cat.id] ?? "●";
+            const rowHeight = Math.max(52, 14 + laneCount * 28);
             return (
               <div key={cat.id} style={{
-                display: "grid", gridTemplateColumns: "140px repeat(12, 1fr)",
+                display: "grid", gridTemplateColumns: "172px repeat(12, 1fr)",
                 borderBottom: `1px solid ${cat.color}22`,
                 minHeight: rowHeight,
                 background: isMyDept
-                  ? `linear-gradient(90deg, ${cat.color}0D 0%, transparent 140px)`
+                  ? `linear-gradient(90deg, ${cat.color}0D 0%, transparent 172px)`
                   : "rgba(0,0,0,0.012)",
                 transition: "background 0.15s",
               }}
                 onMouseEnter={e => { if (isMyDept) e.currentTarget.style.background = `linear-gradient(90deg, ${cat.color}22 0%, ${cat.color}08 100%)`; }}
-                onMouseLeave={e => { e.currentTarget.style.background = isMyDept ? `linear-gradient(90deg, ${cat.color}0D 0%, transparent 140px)` : "rgba(0,0,0,0.012)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = isMyDept ? `linear-gradient(90deg, ${cat.color}0D 0%, transparent 172px)` : "rgba(0,0,0,0.012)"; }}
               >
-                {/* תווית קטגוריה */}
+                {/* תווית אזור — איור ייעודי + שם */}
                 <div style={{
-                  padding: "0 10px", fontSize: 12,
+                  padding: "6px 10px", fontSize: 12,
                   fontWeight: isMyDept ? 600 : 400,
                   color: isMyDept ? cat.color : "var(--text-tertiary)",
-                  display: "flex", alignItems: "center", gap: 7,
+                  display: "flex", alignItems: "center", gap: 9,
                   borderLeft: `3px solid ${isMyDept ? cat.color : "transparent"}`,
-                  background: isMyDept ? cat.color + "08" : "transparent",
+                  background: isMyDept
+                    ? `linear-gradient(90deg, ${cat.color}14, ${cat.color}05)`
+                    : "transparent",
+                  opacity: isMyDept ? 1 : 0.55,
                 }}>
-                  <span style={{ fontSize: 14, lineHeight: 1, opacity: isMyDept ? 1 : 0.4, flexShrink: 0 }}>{icon}</span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {cat.name}
+                  <CatArt id={cat.id} color={cat.color} size={32} />
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.25 }}>
+                      {cat.name}
+                    </span>
+                    {!isMyDept && (
+                      <span style={{ display: "block", fontSize: 8.5, color: "var(--text-tertiary)", fontWeight: 400 }}>
+                        {cat.department === "education" ? "מנהל החינוך" : "מחלקת הנוער"}
+                      </span>
+                    )}
                   </span>
-                  {!isMyDept && <span style={{ fontSize: 8, color: "var(--text-tertiary)", marginRight: 2, flexShrink: 0 }}>
-                    {cat.department === "education" ? "חינוך" : "נוער"}
-                  </span>}
                 </div>
 
                 {/* תאי גאנט */}
@@ -978,16 +992,17 @@ export default function StaffGantt({ department }: StaffGanttProps) {
                         style={{
                           ...style,
                           position: "absolute", top, height: 24,
-                          borderRadius: 6, padding: "0 8px",
+                          borderRadius: 7, padding: "0 9px",
                           fontSize: 10, fontWeight: 600,
                           cursor: "pointer", whiteSpace: "nowrap",
                           overflow: "hidden", textOverflow: "ellipsis",
                           border: isSelected ? `2px solid #fff` : "none",
                           color: "#fff",
+                          textShadow: "0 1px 1px rgba(0,0,0,0.18)",
                           boxShadow: isSelected
                             ? `0 0 0 2px ${cat.color}, 0 4px 12px ${cat.color}66`
-                            : `0 2px 6px ${cat.color}55`,
-                          background: `linear-gradient(135deg, ${cat.color} 0%, ${cat.color}cc 100%)`,
+                            : `0 2px 6px ${cat.color}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                          background: `linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 55%), linear-gradient(135deg, ${cat.color} 0%, ${cat.color}cc 100%)`,
                           transition: "all 0.15s",
                           opacity: isMyDept ? 1 : 0.5,
                           letterSpacing: "0.01em",
